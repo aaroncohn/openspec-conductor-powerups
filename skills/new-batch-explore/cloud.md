@@ -15,7 +15,7 @@ Archived workspaces aren't listed. Use each workspace's `name` to spot milestone
 
 ## 4. Create the workspaces
 
-Name each workspace `{id}-{kebab-case milestone name}`, following the ID rules in `SKILL.md`. The CLI sets the name directly, so the prompt doesn't need the `Workspace/branch name:` line:
+Name each workspace `m{id}-{short-name}`, following the rules in `SKILL.md`. The CLI sets the name directly. The prompt is the same as in `SKILL.md`:
 
 ```
 /opsx:explore Milestone {id}: {Milestone title}
@@ -23,13 +23,15 @@ Name each workspace `{id}-{kebab-case milestone name}`, following the ID rules i
 From the roadmap ({roadmap path} on origin/{base}):
 {the milestone's step table, verbatim}
 
-Explore how to build this milestone. Check the main specs and existing code first, surface open questions and tradeoffs, and end with a recommended scope for a change proposal. Don't implement anything yet.
+Explore how to build this milestone. Check the main specs and existing code first, surface open questions and tradeoffs, and recommend a scope for a change proposal. Don't implement anything yet.
+
+Then ask the open decisions one at a time, starting with the one the others depend on. Just before the first one, say: "Once all the decisions are captured, we'll draft a proposal." End your message on that first decision. Don't close with a pointer to /opsx:propose.
 ```
 
 No dialog is involved, so create them all after the user confirms the picks. Write each prompt to a file first to avoid shell quoting problems:
 
 ```bash
-conductor workspace create --name "{id}-{kebab-name}" --branch "$BASE" --agent claude \
+conductor workspace create --name "m{id}-{short-name}" --branch "$BASE" --agent claude \
   --message-file .context/explore-{id}.md --json
 ```
 

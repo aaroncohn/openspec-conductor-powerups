@@ -1,6 +1,6 @@
 ---
 name: new-batch-explore
-description: Pick the next 2–5 roadmap milestones that can be worked in parallel and open a Conductor workspace for each (local or cloud, matching where it runs), started in /opsx:explore mode and named {milestoneID}-name-of-milestone. Reads the roadmap from origin (fresh fetch), skips milestones that are done, blocked on someone else, or already in an open workspace. Use when the user runs /new-batch-explore or asks to "start the next batch", "spin up workspaces for the next milestones", or "what should we explore next in parallel".
+description: Pick the next 2–5 roadmap milestones that can be worked in parallel and open a Conductor workspace for each (local or cloud, matching where it runs), started in /opsx:explore mode and named m{milestoneID}-short-name (e.g. m10-alerts). Reads the roadmap from origin (fresh fetch), skips milestones that are done, blocked on someone else, or already in an open workspace. Use when the user runs /new-batch-explore or asks to "start the next batch", "spin up workspaces for the next milestones", or "what should we explore next in parallel".
 ---
 
 # new-batch-explore
@@ -51,19 +51,19 @@ Show the picks as a short table (ID, name, why now, what it avoids) and anything
 
 ## 4. Create the workspaces
 
-Workspace name: `{id}-{kebab-case milestone name}`. Use the milestone ID **exactly as the roadmap writes it** (lowercased), so it matches how the user refers to it: a roadmap numbered `9` gives `9-client-dashboards`; one using `M9` gives `m9-client-dashboards`; one using `2.3` gives `2.3-client-dashboards`. Conductor derives the sidebar name from the branch its namer picks after the first message, so the prompt leads with the name.
+Workspace name: `m{id}-{short-name}`, so the milestone number shows in Conductor's sidebar. The ID is the roadmap's, lowercased and prefixed with `m` (`10` gives `m10`, `6b` gives `m6b`; an ID that already starts with a letter, like `M9`, stays `m9`). The short name is one or two kebab-case words for the milestone, e.g. `m10-alerts`, `m9-dashboards`. Don't add `explore`: the workspace soon moves past exploring.
 
 Prompt for each milestone:
 
 ```
-Workspace/branch name: {id}-{kebab-name}
-
 /opsx:explore Milestone {id}: {Milestone title}
 
 From the roadmap ({roadmap path} on origin/{base}):
 {the milestone's step table, verbatim}
 
-Explore how to build this milestone. Check the main specs and existing code first, surface open questions and tradeoffs, and end with a recommended scope for a change proposal. Don't implement anything yet.
+Explore how to build this milestone. Check the main specs and existing code first, surface open questions and tradeoffs, and recommend a scope for a change proposal. Don't implement anything yet.
+
+Then ask the open decisions one at a time, starting with the one the others depend on. Just before the first one, say: "Once all the decisions are captured, we'll draft a proposal." End your message on that first decision. Don't close with a pointer to /opsx:propose.
 ```
 
 Fire them **one at a time** — the Create dialog has a single shared draft, so a second link before Enter would overwrite the first:
@@ -81,10 +81,20 @@ for i in $(seq 1 90); do
 done
 ```
 
+Conductor's namer ignores names in the prompt and picks its own (e.g. "Milestone 10 Alerts Explore"). Once the new row appears, set the name the way a manual rename in the sidebar does. This writes to Conductor's own database, which is undocumented, so back it up once before the first workspace (`sqlite3 "$DB" ".backup '$HOME/conductor-backups/conductor-<timestamp>.db'"`, after `mkdir -p ~/conductor-backups`):
+
+```bash
+NAME="m{id}-{short-name}"
+WS=$(sqlite3 "$DB" "select local_id from workspaces where repository_id=(select id from repos where root_path='$ROOT') order by created_at desc limit 1")
+sqlite3 "$DB" "update workspaces set workspace_name='$NAME', user_set_workspace_name=1 where local_id='$WS'"
+```
+
+About a minute later, check `workspace_name` again and set it once more if the namer overwrote it. The branch keeps the namer's name; that's fine.
+
 Tell the user before the first link: "Conductor will pop a Create dialog for each one — press **Enter** to create it, and I'll queue the next." If the poll times out, ask whether they pressed Enter rather than firing the next link.
 
 Do not name a shell variable `path` — zsh ties it to `PATH`.
 
 ## 5. Report
 
-List each workspace created (ID, intended name, what it was told to explore). After the namer runs, Conductor's sidebar should show `{id}-{kebab-name}`; if it shows something else, tell the user they can rename it in the sidebar, or set the repo's "Rename branch" prompt in Conductor's repo settings to always honor a leading `Workspace/branch name:` line.
+List each workspace created (ID, name, what it was told to explore). If a name didn't stick, say so and give the name to set by hand in the sidebar.

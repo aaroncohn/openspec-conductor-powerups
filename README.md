@@ -7,7 +7,7 @@ Conductor lets you run many coding agents side by side, each in its own workspac
 | Skill | What it does |
 | --- | --- |
 | **new-batch-explore** | Reads your roadmap, picks the next 2–5 milestones that can be built in parallel without colliding, and opens a Conductor workspace for each one, already in `/opsx:explore`. |
-| **babysitter** | After you've explored and proposed in several workspaces, run this in one more workspace. It messages each workspace's Claude session, answers their questions for you, and keeps them moving until every change is tested, merged, archived, and released to production. Then it walks you through the decisions it made, one at a time with a recommendation, and the things only you can test, one at a time with full steps and a shortcut (a prompt for your browser agent, or an offer to do most of it). |
+| **babysitter** | After you've explored and proposed in several workspaces, run this in one more workspace. It messages each workspace's Claude session, answers their questions for you, and keeps them moving until every change is tested, merged, archived, and released to production. If `safe-to-archive` is installed, each workspace runs it last. Then it walks you through the decisions it made, one at a time with a recommendation, and the things only you can test, one at a time with full steps and a shortcut (a prompt for your browser agent, or an offer to do most of it). |
 | **safe-to-archive** | Checks whether a workspace can be archived without losing anything: uncommitted or unpushed work, open PRs, stashes, unarchived OpenSpec changes, files that only exist in this workspace, running processes. Read-only. |
 
 ## The loop
@@ -16,10 +16,10 @@ Conductor lets you run many coding agents side by side, each in its own workspac
 /new-batch-explore          → N new workspaces, each exploring one milestone
 /opsx:explore, /opsx:propose  in each workspace (that's you, thinking with Claude)
 /babysitter                 → apply, test, merge, archive, release (hands off)
-/safe-to-archive            in each workspace → archive it in Conductor
+/safe-to-archive            in each workspace (babysitter runs it for you) → archive it in Conductor
 ```
 
-Each skill works in both **local** (Mac) and **cloud** Conductor workspaces. It checks `CONDUCTOR_IS_LOCAL` and, in the cloud, uses the `conductor` CLI in place of things that only exist on your Mac (the `conductor://` link, Conductor's local database, cross-session messaging). The cloud steps are in each skill's `cloud.md`.
+Each skill works in both **local** (Mac) and **cloud** Conductor workspaces. It checks `CONDUCTOR_IS_LOCAL` and, in the cloud, uses the `conductor` CLI in place of things that only exist on your Mac (the `conductor://` link, Conductor's local database). The cloud steps are in each skill's `cloud.md`. See [Local vs cloud](#local-vs-cloud) for what differs.
 
 ## Install
 
@@ -43,11 +43,23 @@ Or use [skills.sh](https://skills.sh): `npx skills add aaroncohn/openspec-conduc
 
 **For cloud workspaces**, the skills have to be in the repo, because a cloud sandbox can't see your Mac's `~/.claude/skills/`. Copy the folders into your project's `.claude/skills/` and commit them.
 
+## Local vs cloud
+
+Each skill works with the workspaces of its own kind: run from a local workspace, it creates, messages and checks local workspaces; run from a cloud workspace, cloud ones. Keep a batch all local or all cloud.
+
+| | Local (Conductor on your Mac) | Cloud (Conductor cloud workspaces) |
+| --- | --- | --- |
+| **Install** | Plugin, or copy the folders into `~/.claude/skills/` (see [Install](#install)). | Copy the folders into your repo's `.claude/skills/` and commit them: a cloud sandbox can't see your Mac's plugins or `~/.claude/skills/`. |
+| **Setup** | None. | The `conductor` CLI needs an API token. Turn on automatic API access in Conductor → Settings → General before creating the workspaces (it only applies to new ones), or set `CONDUCTOR_API_KEY`. |
+| **new-batch-explore** | Opens Conductor's Create dialog for each workspace; you press Enter once per workspace. Then it names each one `m{id}-{name}` in Conductor's database (backed up first). | Creates and names the workspaces itself, with no clicks, and gives you a link to each. |
+| **babysitter** | Messages appear in each workspace's chat, starting with "Via Babysitter:". They go through Conductor's database (backed up first; falls back to Claude Code's `SendMessage` if that stops working). Keep the Conductor app open and the Mac awake. Sessions can use your browser and its logins. | Messages appear in each workspace's chat through the `conductor` CLI. Sessions run in Linux sandboxes, so anything that needs your Mac (your browser and its logins, local files) comes to you as a handoff. |
+| **safe-to-archive** | Checks this workspace's branch. Other local branches live in the shared repository and survive archiving. | Archiving deletes the whole sandbox, so it checks every branch in it, plus any open Browserbase session. |
+
 ## Requirements and assumptions
 
 These skills are opinionated. They work best if your setup looks like this:
 
-- **Claude Code in Conductor.** Locally, `new-batch-explore` reads Conductor's database and uses its `conductor://` link, and `babysitter` messages sessions by queuing them in Conductor's local database (see below). In the cloud, both use the `conductor` CLI, which needs an API token: turn on automatic API access in Conductor → Settings → General, or set `CONDUCTOR_API_KEY`. They won't work with other agents.
+- **Claude Code in Conductor.** Locally, `new-batch-explore` uses Conductor's `conductor://` link to open each workspace and then names it in Conductor's database (backed up first), and `babysitter` messages sessions by queuing them in Conductor's local database (see below). In the cloud, both use the `conductor` CLI, which needs an API token: turn on automatic API access in Conductor → Settings → General, or set `CONDUCTOR_API_KEY`. They won't work with other agents.
 - **OpenSpec** with the `/opsx:*` commands installed in the repo.
 - **GitHub and the `gh` CLI**, logged in. PRs are squash-merged into `main`.
 - **A roadmap file** for `new-batch-explore`: a `roadmap.md` (or similar) on your default branch that lists milestones with IDs, steps, and status (✅ for done, 🟡 for in progress). It skips milestones marked as waiting on someone, and it will ask you where the roadmap is if it can't find one.

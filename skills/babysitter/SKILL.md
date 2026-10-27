@@ -31,6 +31,7 @@ For every in-scope change:
 2. CI has passed: quick checks on the PR, plus the full suite on `main` after the last merge.
 3. It was tested as far as an LLM can, and the suites that ran are listed in the PR.
 4. It's archived (`/opsx:archive` with specs synced) in a separate openspec-only PR that is merged.
+5. If `safe-to-archive` is installed, it has run in the change's workspace and its verdict is in the final report.
 
 Then (unless an option says to stop earlier) the latest `main` is verified on dev, promoted to production, and verified there, and the final report has been posted.
 
@@ -81,10 +82,11 @@ Then answer whatever the session last stopped on (e.g. "Yes, run `/opsx:apply`",
 3. **PR:** follow the repo's conventions (title, body sections, commit author, CI labels). Request only quick checks if the repo separates them and you ran the heavy suites locally.
 4. **Merge:** once quick checks are green, rebase on the latest `origin/main` (other milestones may have landed), re-run the checks affected by the rebase, then `gh pr merge --squash`. Resolve conflicts keeping both sides, and tell me what you touched. Add specific warnings about files you know another workspace also changes (e.g. "the build number moved on main: use main's value + 1").
 5. **Don't** run the full CI suite on main or touch production: the coordinator does that once everything is in.
-6. **Archive:** after the merge, open a separate openspec-only archive PR (archive + sync specs, plus whatever past archive PRs did, e.g. roadmap or notes updates) and merge it once its checks pass. If CI skips openspec-only PRs, run `openspec validate --all --strict` and merge it yourself. **Exception:** if some tasks can only be checked against a deployed environment, leave them open, and archive after the coordinator says the deploy is live.
+6. **Archive:** after the merge, run `/opsx:archive` (sync the specs) and open its result as a separate openspec-only archive PR ( plus whatever past archive PRs did, e.g. roadmap or notes updates) and merge it once its checks pass. If CI skips openspec-only PRs, run `openspec validate --all --strict` and merge it yourself. **Exception:** if some tasks can only be checked against a deployed environment, leave them open, and archive after the coordinator says the deploy is live.
 7. **Setup only the user can do** (secrets, dashboard settings, third-party accounts): don't block on it. Make sure nothing hard-fails without it, put the steps in the PR body under "owner setup", and tell me right away.
 8. Reply with the PR URL(s) when merged.
 9. **Log:** after each step (tasks done, tests run, PR opened, merged, archived) and each decision you made without asking, add a dated line to `.context/babysitter-log.md` in your workspace, with PR links.
+10. **Last:** once the archive PR is merged, if the `safe-to-archive` skill is installed (in your skill list as `safe-to-archive`, or `openspec-conductor-powerups:safe-to-archive` as a plugin), run `/safe-to-archive` as your final command. Fix any blocker that's your own work (e.g. commit and push), run it again, and reply with its verdict. Don't archive the workspace.
 
 ## 4. Watch and keep them moving
 
@@ -112,7 +114,7 @@ Keep them short and in the same shape every time:
 
 1. Run the repo's full CI suite on `main` once, the way the repo does it (e.g. `gh workflow run <ci>.yml --ref main`), and watch it to green. If it fails, have the owning session fix it forward with a normal PR.
 2. Confirm dev deployed and serves that commit (health endpoint, deploy workflow, or the URL the docs give).
-3. Tell sessions with deploy-dependent tasks that dev is live at `<commit>`. They run those checks, then archive (rule 6). Wait for every archive PR to merge.
+3. Tell sessions with deploy-dependent tasks that dev is live at `<commit>`. They run those checks, then archive (rule 6). Wait for every archive PR to merge and every `/safe-to-archive` verdict (rule 10).
 4. Promote to production using the project's documented procedure (README/docs "promote"/"production", CLAUDE.md, memory, workflows on a production branch or tag). Note first what's going out, including DB migrations. Do it without asking, unless `--ask-before-prod` was given: then post that list and wait for the user's go. If no procedure is documented, stop and ask.
 5. Watch the production deploy to green and verify production serves the new commit. If it's broken, roll back as documented, tell the user, and fix forward.
 
@@ -126,7 +128,7 @@ Your last message must contain everything:
 - **Skipped:** workspaces not in scope, and any session that couldn't be reached.
 - **Things only you can test:** grouped by feature, as numbered steps with the URL to open.
 - **Decisions for a future workspace:** every decision made on your behalf and every "owner review" item, plus follow-ups and anything noticed along the way (e.g. an unexpected env var). Numbered, one line each.
-- **Clean-up:** the merged workspaces can be archived. Suggest `/safe-to-archive` in each.
+- **Clean-up:** each workspace's `/safe-to-archive` verdict (✅ safe, or ⛔ with what's left), so the user knows which to archive in Conductor. If `safe-to-archive` isn't installed, say so and list the workspaces whose PRs and archive PRs are merged.
 
 End the report with decision 1 (see step 9).
 
@@ -161,6 +163,8 @@ Ask the user to reply "pass", "fail: <what happened>", or "skip". On a fail, ask
 **When both lists are done,** post a wrap-up:
 - the decisions made and the test results, with failures first
 - a self-contained brief the user can paste into a new workspace to start the follow-up change. It should cover the decisions to apply and the failures to fix, each with enough detail to act on without this conversation.
+
+Then, if `safe-to-archive` is installed, run `/safe-to-archive` in this workspace as your final command.
 
 ## Rules
 

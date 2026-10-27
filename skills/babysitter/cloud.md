@@ -45,29 +45,31 @@ The `Via Babysitter: ` prefix and rules from step 3 still apply. These messages 
 
 ## 4. Watching them
 
-There are no idle notifications in the cloud. Run a watcher in the background (Bash `run_in_background`) so you're woken when a session stops working, and re-start it after each event. Fire only on a **change** to idle: a session can sit idle while its own background job (tests, CI watch) runs, and a watcher that fires on any idle state wakes you over and over for nothing.
+There are no idle notifications in the cloud. Run a watcher in the background (Bash `run_in_background`) so you're woken when a session finishes a turn, and re-start it after each event. It notes each session's `updatedAt` when it starts and fires when a session is idle with a newer one, so a short turn that starts and ends between checks still counts, and a session already sitting idle doesn't fire.
 
 ```bash
-cat > .context/watch.sh <<'EOF'
-#!/usr/bin/env bash
-# Exits with "<sessionId> <status>" when a watched session goes from working to anything else.
-declare -A last
-while true; do
-  for s in "$@"; do
-    st=$(conductor --json session status "$s" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status") or "")' 2>/dev/null)
-    [ -z "$st" ] && continue
-    if [ "${last[$s]}" = working ] || [ "${last[$s]}" = queued ]; then
-      [ "$st" != working ] && [ "$st" != queued ] && { echo "$s $st"; exit 0; }
-    fi
-    last[$s]=$st
-  done
-  sleep 60
-done
+cat > .context/watch.py <<'EOF'
+# Prints "<sessionId> <status>" and exits when a watched session finishes a turn.
+import json, subprocess, sys, time
+def status(s):
+    r = subprocess.run(["conductor", "--json", "session", "status", s], capture_output=True, text=True)
+    try:
+        d = json.loads(r.stdout)
+        return d.get("status") or "", d.get("updatedAt") or ""
+    except ValueError:
+        return "", ""
+start = {s: status(s)[1] for s in sys.argv[1:]}
+while True:
+    time.sleep(30)
+    for s in sys.argv[1:]:
+        st, updated = status(s)
+        if st and st not in ("working", "queued") and updated != start[s]:
+            print(s, st)
+            sys.exit(0)
 EOF
-chmod +x .context/watch.sh
-.context/watch.sh <sessionId> <sessionId> ...      # run in the background
+python3 .context/watch.py <sessionId> <sessionId> ...      # run in the background
 ```
 
-A session that is already idle when you start won't trigger it, so check those right away by reading their transcripts. When it fires, read that session's new messages, check its PR, act, and re-start the watcher for the sessions still in flight.
+Start it just before you send a message (so the turn it triggers counts), and check sessions that were already idle when you started by reading their transcripts. When it fires, read that session's new messages, check its PR, act, and re-start the watcher for the sessions still in flight.
 
 If a session stops responding or its workspace is gone, do the step yourself from this sandbox (`git fetch origin <branch>` and work on that branch) and say so in the update.
