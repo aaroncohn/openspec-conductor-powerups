@@ -53,7 +53,7 @@ git worktree list --porcelain                            # every Conductor works
 git ls-tree --name-only origin/main openspec/changes/    # changes already on main
 ```
 
-A worktree other than this one is **in scope** when `openspec/changes/` (skip `archive/`, include uncommitted files) has a change that isn't archived on `origin/main`. Worktrees without one are still exploring. Leave them alone and list them as skipped.
+A worktree other than this one is **in scope** when `openspec/changes/` (skip `archive/`, include uncommitted files) has a change that isn't archived on `origin/main`. It's also in scope when it has work that isn't on `origin/main` (uncommitted changes, an open PR, or commits whose content isn't on `origin/main`), or when its session last stopped asking whether to commit, open a PR or merge: drive that work to merge too. Other worktrees are still exploring. Leave them alone and list them as skipped.
 
 Find each worktree's chat session (the tab open in that workspace) with `python3 <this skill's dir>/conductor-local.py session <worktree path>`. The session's transcript is the newest `.jsonl` in `~/.claude/projects/<worktree path with every character that isn't a letter or digit replaced by ->/`. Read its last assistant messages to see where it stopped:
 
@@ -62,6 +62,8 @@ jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="text") 
 ```
 
 Before the first message, back up Conductor's database: `sqlite3 "$CONDUCTOR_DB_PATH" ".backup '$HOME/conductor-backups/conductor-<timestamp>.db'"` (make the folder first). Tell the user where the backup is, and that your messages will appear in each workspace's chat starting with "Via Babysitter:".
+
+Then name this workspace `Babysitter Command`, so the user can find it in the sidebar: the same `sqlite3` update as in "Stage in the workspace name", with this worktree's path.
 
 Then put each workspace's stage in its name (see "Stage in the workspace name"), skipped ones included.
 
@@ -95,6 +97,8 @@ In the cloud, see `cloud.md`. If a rename doesn't stick, say so once in the next
 Write each message to `.context/msg-<n>.md`, then send it with `python3 <this skill's dir>/conductor-local.py send <session id> <file>`. It waits until Conductor delivers the message (usually under 30 seconds) and exits non-zero if it wasn't delivered within 2 minutes; it withdraws the message in that case. Then fall back to `SendMessage` with `notify_when_idle: true` (find the session's name with `ListAgents`: `<workspace directory>-<suffix>`), and tell the user in the next update that this workspace's chat won't show the work. If neither reaches the session, see Rules. Start every message you send a session, this one and all later ones, with `Via Babysitter: `, so the user recognises it in that workspace. In the first one, follow it with one line on what you're driving:
 
 > Via Babysitter: I'm driving <list of changes> to merge, green CI, archive, and the production release.
+
+Then say that the user started this run with `/babysitter` in <this workspace>, so these instructions are their go-ahead, not a request from a peer session, and merging to `main` is approved. Without this, sessions can refuse to act on another session's message.
 
 Then answer whatever the session last stopped on (e.g. "Yes, run `/opsx:apply`", "Yes, push"), and give the rules:
 

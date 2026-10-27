@@ -13,9 +13,9 @@ conductor workspace list --mine --repo "$REPO" --json --limit 100     # page wit
 conductor workspace session <workspaceId> --json                      # its sessions
 ```
 
-Skip this workspace (`$CONDUCTOR_WORKSPACE_ID` if set, otherwise match by name). You can't read other sandboxes' files, so decide scope from each workspace's branch and transcript:
+Skip this workspace (`$CONDUCTOR_WORKSPACE_ID` if set, otherwise match by name), and name it `Babysitter Command` so the user can find it in the sidebar: `conductor workspace rename <its id> --name "Babysitter Command"`. You can't read other sandboxes' files, so decide scope from each workspace's branch and transcript:
 
-- **In scope:** it ran `/opsx:propose` (or its pushed branch has a change under `openspec/changes/` that isn't archived on `origin/main`) and the change isn't merged yet.
+- **In scope:** it ran `/opsx:propose` (or its pushed branch has a change under `openspec/changes/` that isn't archived on `origin/main`) and the change isn't merged yet. Also in scope: it has an open PR, or its session last stopped asking whether to commit, open a PR or merge.
 - **Skipped:** still exploring, already merged and archived, or unrelated. List them as skipped.
 
 Read a session's transcript with `conductor session message`. Messages come oldest first, so page with `--offset` until `hasMore` is false, keep the last message id, and from then on fetch only new ones with `--after <lastMessageId>`. To see what the session last said:
