@@ -4,10 +4,15 @@
   "version": "0.1.0",
   "author": {
     "name": "Aaron Cohn",
-    "url": "https://github.com/aaroncohn"
+    "url": "https://aaroncohn.com"
   },
   "homepage": "https://github.com/aaroncohn/openspec-conductor-powerups",
   "repository": "https://github.com/aaroncohn/openspec-conductor-powerups",
   "license": "MIT",
-  "keywords": ["openspec", "conductor", "skills", "workflow"]
+  "keywords": [
+    "openspec",
+    "conductor",
+    "skills",
+    "workflow"
+  ]
 }

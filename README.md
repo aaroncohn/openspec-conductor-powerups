@@ -78,6 +78,10 @@ You can also name the workspaces or milestones to cover: `/babysitter 2.1 2.3 --
 
 Issues and PRs are welcome. If one of these skills does something wrong in your setup, an issue showing what happened is the most useful thing you can send.
 
+## Made by
+
+[Aaron Cohn](https://aaroncohn.com). If these save you time, I'd love to hear about it: open an issue, star the repo, or say hi through my site.
+
 ## License
 
 [MIT](LICENSE)

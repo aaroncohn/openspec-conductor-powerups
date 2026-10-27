@@ -3,7 +3,7 @@
   "description": "Opinionated skills for people who use OpenSpec inside Conductor",
   "owner": {
     "name": "Aaron Cohn",
-    "url": "https://github.com/aaroncohn"
+    "url": "https://aaroncohn.com"
   },
   "plugins": [
     {
