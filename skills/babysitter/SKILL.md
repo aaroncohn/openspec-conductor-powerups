@@ -134,10 +134,14 @@ When a session reports setup only the user can do, don't save it for the end. In
 
 ## 6. Status updates
 
-Keep them short and in the same shape every time:
+Write them like a product manager briefing the founder: plain words about what the product gained, not a build log. Keep them short and in the same shape every time:
 
-- Lead line: "**N of M merged**" plus anything newly done (with PR numbers).
+- Lead line: "**N of M merged**".
+- **Finished:** what's done since the last update, as what it does for the product's users, e.g. "The spam check is merged: suspicious contact messages now get a quick challenge instead of landing in possible spam (#191)." Skip it if nothing finished.
+- **Working on now:** one line per active workspace: the feature in words, where it is, and what's next with a rough time, e.g. "Landing page try-it demo: built and tested; opening its PR, likely merged within the hour."
 - A table with one row for every open (not archived) workspace of this repo except this one, from a fresh scan (step 1), whether you're babysitting it or not. Columns: workspace (its current name), stage, progress (where it is and what it's waiting on; for one you're not babysitting, why, e.g. "exploring", "merged and archived", "stopped by user"), and a narrow last column "babysitter monitoring?" with `x` if you're babysitting it and empty if not. Post the whole table every time, not just the rows that changed.
+- **Plain words everywhere:** name each feature in words, not just its roadmap ID ("2.2b, the spam check"). Leave out test counts, file names, task numbers, CI job names and internal labels unless something failed or the user has to act on them; then say what it means for the user. Don't invent codes like "C1"; describe the item.
+- **Quiet updates** (nothing finished, no stage changes) stay one or two lines in the same plain words, e.g. "Still building: the spam check is on its last tests, the landing page is waiting on review. Nothing needed from you."
 - Any "Decision I made for you (you can reverse it)".
 - End with either "**Next:** <the one thing the user should do>" or "No action needed from you. I'll come back when <event>."
 
