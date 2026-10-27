@@ -1,0 +1,156 @@
+---
+name: babysitter
+description: Coordinate every other Conductor workspace of this repo whose OpenSpec change has been proposed, messaging their Claude sessions directly and keeping them moving until each change is built, tested, merged into main with green CI and archived, then promote main to production. Answers their questions on the user's behalf, hands the user any setup only they can do as soon as it's known, and ends with a list of things only the user can test plus decisions for a future workspace. Works in local and cloud Conductor workspaces. Run with /babysitter, optionally followed by the workspaces or milestones to cover, and --ask-before-prod or --stop-after merged|dev.
+disable-model-invocation: true
+---
+
+# babysitter
+
+The user has finished `/opsx:explore` and `/opsx:propose` in one or more other Conductor workspaces and wants the features shipped without more involvement. This session is the **coordinator**. Each workspace's own Claude session keeps doing its own work, with its explore context intact. The coordinator sends instructions straight into those sessions, answers their questions on the user's behalf, nudges them when they stall, and owns the steps that span workspaces: CI on main, the production release, and the final report.
+
+Fully autonomous: never wait on the user for anything a session can do or decide. Only setup that needs the user's own accounts goes to the user (see step 5).
+
+**Local or cloud.** If `CONDUCTOR_IS_LOCAL` is `0`, this is a cloud workspace: the other workspaces run in their own sandboxes, so read `cloud.md` (next to this file) and use it for finding the workspaces (step 1), messaging them (step 3), and watching them (step 4). Everything else is the same.
+
+## Options
+
+By default the babysitter goes all the way to production without asking. The user can change that after `/babysitter`, as a flag or in plain words ("ask me before prod", "stop after dev"):
+
+- `--ask-before-prod`: everything as normal, but before promoting (step 7.4), post what's going out (PRs, database migrations) and wait for the user's go.
+- `--stop-after merged`: stop once every change is merged and archived. Skip step 7: no full CI run on `main`, no dev check, no production release. Archive-blocking tasks that need a deployed environment stay open and go in the report.
+- `--stop-after dev`: do step 7 up to and including dev (full CI on `main`, dev verified, archives merged), then stop before production.
+
+Record the chosen option in the state file and apply it to the goal, the "Done means" list, and the final report.
+
+## Done means
+
+For every in-scope change:
+1. Its PR is squash-merged into `main` (rebased on the latest `main` first).
+2. CI has passed: quick checks on the PR, plus the full suite on `main` after the last merge.
+3. It was tested as far as an LLM can, and the suites that ran are listed in the PR.
+4. It's archived (`/opsx:archive` with specs synced) in a separate openspec-only PR that is merged.
+
+Then (unless an option says to stop earlier) the latest `main` is verified on dev, promoted to production, and verified there, and the final report has been posted.
+
+## 0. Set the goal
+
+If a tool for proposing a session goal is available, propose this condition with it (trimmed to match `--stop-after`, if given). Otherwise print it for the user to paste, and carry on without waiting:
+
+```
+/goal Every workspace in .context/babysitter.md has its change merged into main and archived, full CI on main is green after the last merge, the latest main is promoted to production and verified, and the babysitter final report (things only I can test + open decisions) has been posted.
+```
+
+## 1. Find the workspaces
+
+If the user named workspaces or milestones after `/babysitter`, cover exactly those. Otherwise detect them:
+
+```bash
+git fetch origin -q
+git worktree list --porcelain                            # every Conductor workspace of this repo
+git ls-tree --name-only origin/main openspec/changes/    # changes already on main
+```
+
+A worktree other than this one is **in scope** when `openspec/changes/` (skip `archive/`, include uncommitted files) has a change that isn't archived on `origin/main`. Worktrees without one are still exploring. Leave them alone and list them as skipped.
+
+Match each worktree to its live session with `ListAgents`: sessions are named `<workspace>-<suffix>`, where the workspace is the worktree directory's basename. The session's transcript is the newest `.jsonl` in `~/.claude/projects/<worktree path with every character that isn't a letter or digit replaced by ->/`. Read its last assistant messages to see where it stopped:
+
+```bash
+jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="text") | .text' <file> | tail -20
+```
+
+Also learn the repo's conventions before the first message: CI workflows and labels (which checks are quick and which are full, how the full suite is triggered), AGENTS.md / CLAUDE.md / README rules for PRs and commit authors, how past archive PRs looked (`gh pr list --state merged -L 10`), and how dev and production deploy and get verified.
+
+## 2. Keep a state file
+
+`.context/babysitter.md` has one row per change: workspace, session name, branch, change, PR, archive PR, stage (`building → testing → PR open → merged → post-merge checks → archived`), what the session is waiting on, and notes. Also keep the list of user setup tasks and decisions you made. Update it after every event. After a context compaction, re-read it before acting.
+
+## 3. Brief each session
+
+Send each session one `SendMessage` with `notify_when_idle: true`. Start with a header line so the user recognises it in that workspace:
+
+> (From the babysitter coordinator in workspace `<this workspace>`, on <user's name>'s behalf. I'm driving <list of changes> to merge, green CI, archive, and the production release.)
+
+Then answer whatever the session last stopped on (e.g. "Yes, run `/opsx:apply`", "Yes, push"), and give the rules:
+
+1. **Keep going without asking.** Finish every task, run the review and tests, then push and open the PR. If you'd normally stop to ask, pick the recommended option, record it as an assumption in the change artifacts, list it in the PR body under "owner review", and continue.
+2. **Test as much as possible.** Run the checks CI runs. Add tests for new behaviour. Run the expensive suites locally (db, e2e, etc.) and list in the PR body which ran and which couldn't. For UI changes, drive the flows in a browser. List what only the user can test, with steps.
+3. **PR:** follow the repo's conventions (title, body sections, commit author, CI labels). Request only quick checks if the repo separates them and you ran the heavy suites locally.
+4. **Merge:** once quick checks are green, rebase on the latest `origin/main` (other milestones may have landed), re-run the checks affected by the rebase, then `gh pr merge --squash`. Resolve conflicts keeping both sides, and tell me what you touched. Add specific warnings about files you know another workspace also changes (e.g. "the build number moved on main: use main's value + 1").
+5. **Don't** run the full CI suite on main or touch production: the coordinator does that once everything is in.
+6. **Archive:** after the merge, open a separate openspec-only archive PR (archive + sync specs, plus whatever past archive PRs did, e.g. roadmap or notes updates) and merge it once its checks pass. If CI skips openspec-only PRs, run `openspec validate --all --strict` and merge it yourself. **Exception:** if some tasks can only be checked against a deployed environment, leave them open, and archive after the coordinator says the deploy is live.
+7. **Setup only the user can do** (secrets, dashboard settings, third-party accounts): don't block on it. Make sure nothing hard-fails without it, put the steps in the PR body under "owner setup", and tell me right away.
+8. Reply with the PR URL(s) when merged.
+
+## 4. Watch and keep them moving
+
+- `notify_when_idle` is one-shot. Every time a session goes idle, read the end of its transcript, check its PR (`gh pr view <n> --json state,mergeStateStatus,statusCheckRollup`), act, and subscribe again with your reply.
+- **It asked something:** answer as the user would: the recommended option, recorded as an assumption, non-blocking. If it's a real product or security call, still pick the recommended option (as a separate follow-up change if it doesn't need to block). Then tell the user in your next update: "**Decision I made for you (you can reverse it):** …".
+- **It stalled** (e.g. a long test run finished but it never woke up to read it): prod it to check the results and continue.
+- **Overlap:** when one change lands, tell the remaining sessions what moved on `main` that touches their files.
+- **A session that won't take messages** (the notice says the subscription expired, or a delivery notice says messages are held for approval): tell the user once, in the next update, and keep the others moving.
+- Don't poll `ListAgents` in a loop. Between events, end the turn with a status update. For PR checks you're waiting on, `gh pr checks <n> --watch` is fine.
+
+## 5. User setup: hand it off as soon as it's known
+
+When a session reports setup only the user can do, don't save it for the end. In your next update, give the user a self-contained handoff block (use a handoff-block skill if the repo has one). It needs: goal, exact account, steps, done-when, don't-touch, report-back. Say which workspace or terminal to paste it into. Repeat a one-line "Next: …" reminder in every update until the user confirms. Plan the production release so it waits for setup that production needs, or confirm that nothing breaks without it.
+
+## 6. Status updates
+
+Keep them short and in the same shape every time:
+
+- Lead line: "**N of M merged**" plus anything newly done (with PR numbers).
+- A table or bullets, one per change: where it is and what it's waiting on.
+- Any "Decision I made for you (you can reverse it)".
+- End with either "**Next:** <the one thing the user should do>" or "No action needed from you. I'll come back when <event>."
+
+## 7. After the last merge: CI on main, dev, production
+
+1. Run the repo's full CI suite on `main` once, the way the repo does it (e.g. `gh workflow run <ci>.yml --ref main`), and watch it to green. If it fails, have the owning session fix it forward with a normal PR.
+2. Confirm dev deployed and serves that commit (health endpoint, deploy workflow, or the URL the docs give).
+3. Tell sessions with deploy-dependent tasks that dev is live at `<commit>`. They run those checks, then archive (rule 6). Wait for every archive PR to merge.
+4. Promote to production using the project's documented procedure (README/docs "promote"/"production", CLAUDE.md, memory, workflows on a production branch or tag). Note first what's going out, including DB migrations. Do it without asking, unless `--ask-before-prod` was given: then post that list and wait for the user's go. If no procedure is documented, stop and ask.
+5. Watch the production deploy to green and verify production serves the new commit. If it's broken, roll back as documented, tell the user, and fix forward.
+
+Release once, after everything is in, not after each merge. With `--stop-after merged`, skip this whole step; with `--stop-after dev`, stop after item 3.
+
+## 8. Final report
+
+Your last message must contain everything:
+
+- **Shipped:** a table with one row per change: PR, archive PR, merged ✅, archived ✅. Then: full CI on main ✅ (run link), dev ✅, and production ✅ (commit, deploy link, URL verified, migrations applied). If an option stopped earlier, say where it stopped and what's left to release.
+- **Skipped:** workspaces not in scope, and any session that couldn't be reached.
+- **Things only you can test:** grouped by feature, as numbered steps with the URL to open.
+- **Decisions for a future workspace:** every decision made on your behalf and every "owner review" item, plus follow-ups and anything noticed along the way (e.g. an unexpected env var). Numbered, one line each.
+- **Clean-up:** the merged workspaces can be archived. Suggest `/safe-to-archive` in each.
+
+End the report with decision 1 (see step 9).
+
+## 9. Walk the user through decisions, then tests
+
+Go one item per message. Wait for the answer before sending the next. Log every answer in the state file as you go.
+
+**Decisions first, in list order.** Each message has:
+- "Decision N of M"
+- one or two lines of context: what was built and why it's open
+- lettered options (a, b, c…), each with its trade-off in a few words
+- one option marked **(recommended)** with a one-line reason
+
+When the choices aren't a fixed set, still offer the likely answers as options. If there's truly no sensible recommendation, say why. Accept a letter, a letter plus tweaks, or a free answer.
+
+**Then the tests, in list order.** Each message has:
+- "Test N of M" and the feature it covers
+- the URL to open, and the account or role to use
+- numbered steps
+- what should happen
+
+Ask the user to reply "pass", "fail: <what happened>", or "skip". On a fail, ask at most one follow-up if it helps pin the bug down (a screenshot, or exactly what they clicked), then move on.
+
+**When both lists are done,** post a wrap-up:
+- the decisions made and the test results, with failures first
+- a self-contained brief the user can paste into a new workspace to start the follow-up change. It should cover the decisions to apply and the failures to fix, each with enough detail to act on without this conversation.
+
+## Rules
+
+- Never run `login`/`logout` for any CLI and never write secrets to files. Follow the project's account, secrets and browser-profile rules, and pass the relevant ones on to sessions when they matter.
+- Don't edit files in other worktrees yourself. The sessions own their workspaces. Exception: a session is gone or unresponsive and the work would otherwise stall. Then do the step from its worktree (`git -C <path>`), and say so in the update.
+- Don't rename branches, and don't archive Conductor workspaces.

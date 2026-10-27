@@ -1,0 +1,15 @@
+{
+  "name": "openspec-conductor-powerups",
+  "description": "Opinionated skills for people who use OpenSpec inside Conductor",
+  "owner": {
+    "name": "Aaron Cohn",
+    "url": "https://github.com/aaroncohn"
+  },
+  "plugins": [
+    {
+      "name": "openspec-conductor-powerups",
+      "source": "./",
+      "description": "Start a batch of OpenSpec explorations in parallel Conductor workspaces, babysit them to production, and check each workspace is safe to archive."
+    }
+  ]
+}
