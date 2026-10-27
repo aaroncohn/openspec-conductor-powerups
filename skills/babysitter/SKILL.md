@@ -137,7 +137,7 @@ When a session reports setup only the user can do, don't save it for the end. In
 Keep them short and in the same shape every time:
 
 - Lead line: "**N of M merged**" plus anything newly done (with PR numbers).
-- A table of every workspace you're babysitting, with columns workspace (its current name), stage, and progress (where it is and what it's waiting on). Post the whole table every time, not just the rows that changed.
+- A table with one row for every open (not archived) workspace of this repo except this one, from a fresh scan (step 1), whether you're babysitting it or not. Columns: workspace (its current name), stage, progress (where it is and what it's waiting on; for one you're not babysitting, why, e.g. "exploring", "merged and archived", "stopped by user"), and a narrow last column "babysitter monitoring?" with `x` if you're babysitting it and empty if not. Post the whole table every time, not just the rows that changed.
 - Any "Decision I made for you (you can reverse it)".
 - End with either "**Next:** <the one thing the user should do>" or "No action needed from you. I'll come back when <event>."
 
