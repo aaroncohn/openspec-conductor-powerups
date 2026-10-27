@@ -11,7 +11,15 @@ REPO=$(basename -s .git "$(git remote get-url origin)")
 conductor workspace list --repo "$REPO" --json --limit 100    # page with --offset while hasMore
 ```
 
-Archived workspaces aren't listed. Use each workspace's `name` to spot milestones already in flight, plus unarchived `openspec/changes/*` on `origin/$BASE` as in `SKILL.md`.
+Archived workspaces aren't listed. Names aren't enough, so for each workspace also read the first message of its sessions, which names its milestone, and its status:
+
+```bash
+conductor workspace session <workspaceId> --json                       # its sessions
+conductor session message <sessionId> --json --limit 1                 # the first message
+conductor --json session status <sessionId>
+```
+
+A milestone is **in flight** if a workspace's name, branch or first message mentions it, or an unarchived `openspec/changes/*` on `origin/$BASE` or on a workspace's pushed branch covers it. Working or idle doesn't matter: an idle workspace waiting on a decision is still in progress.
 
 ## 4. Create the workspaces
 

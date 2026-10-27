@@ -25,16 +25,23 @@ If no `roadmap.md` exists, look for an equivalent (`ROADMAP*`, `docs/plan.md`, `
 
 ## 2. Find what's already in flight
 
-Conductor's local database lists this repo's open workspaces:
+Never propose a milestone that another open workspace is already working on. Names aren't enough (Conductor's own names often drop the milestone number), so for every open workspace of this repo, read its status, last activity, and the first message it was given, which names its milestone:
 
 ```bash
 DB="${CONDUCTOR_DB_PATH:-$HOME/Library/Application Support/com.conductor.app/conductor.db}"
 ROOT="${CONDUCTOR_ROOT_PATH:-$(git rev-parse --show-toplevel)}"
-sqlite3 "$DB" "select workspace_name, branch from workspaces
-  where repository_id=(select id from repos where root_path='$ROOT') and state!='archived'"
+sqlite3 -separator ' | ' "file:$DB?mode=ro" "select w.workspace_name, w.branch, w.workspace_path,
+    ifnull(s.status, ''), ifnull(w.last_activity_at, ''),
+    replace(substr((select m.content from session_messages m where m.session_id = w.active_session_id
+      and m.role = 'user' order by m.created_at limit 1), 1, 200), char(10), ' ')
+  from workspaces w left join sessions s on s.id = w.active_session_id
+  where w.repository_id = (select id from repos where root_path = '$ROOT') and w.state != 'archived'
+  order by w.last_activity_at desc"
 ```
 
-Also note unarchived `openspec/changes/*` on `origin/$BASE` if the repo uses OpenSpec: a milestone with a change already proposed is in flight.
+Then list the OpenSpec changes in each of those workspaces' folders, committed or not: `ls <workspace_path>/openspec/changes` (skip `archive/`). Count a change only if it isn't archived on `origin/$BASE`; an older branch can still show a change that has since been archived. Also note unarchived `openspec/changes/*` on `origin/$BASE` itself.
+
+A milestone is **in flight** if any of these mentions it: a workspace's name, branch or first message, or a change in progress (in a workspace or on `origin/$BASE`). Working or idle doesn't matter: an idle workspace waiting on a decision is still in progress. When unsure whether a workspace covers a milestone, read the end of its transcript (the newest `.jsonl` in `~/.claude/projects/<workspace_path with every character that isn't a letter or digit replaced by ->/`).
 
 ## 3. Choose 2–5 milestones
 
