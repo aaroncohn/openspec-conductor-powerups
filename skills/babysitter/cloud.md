@@ -38,7 +38,7 @@ Write each message to a file first (it avoids shell quoting problems), then send
 conductor message create --session <sessionId> --message-file .context/msg-<n>.md
 ```
 
-The header line and rules from step 3 still apply. Two cloud additions for the rules:
+The `Via Babysitter: ` prefix and rules from step 3 still apply. These messages show in the workspace's chat. Two cloud additions for the rules:
 
 - Sessions can't message you back. Tell them to put anything you need (PR URL, questions, setup only the user can do) in their final reply, where you'll read it.
 - Anything that needs the user's own machine (their browser and its logins, local files) can't be done from the cloud. Treat it as user setup (step 5) and write the handoff block for a **local** workspace.

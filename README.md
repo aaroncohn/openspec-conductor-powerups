@@ -47,7 +47,7 @@ Or use [skills.sh](https://skills.sh): `npx skills add aaroncohn/openspec-conduc
 
 These skills are opinionated. They work best if your setup looks like this:
 
-- **Claude Code in Conductor.** Locally, `new-batch-explore` reads Conductor's database and uses its `conductor://` link, and `babysitter` uses Claude Code's agent messaging (`ListAgents`, `SendMessage`). In the cloud, both use the `conductor` CLI, which needs an API token: turn on automatic API access in Conductor → Settings → General, or set `CONDUCTOR_API_KEY`. They won't work with other agents.
+- **Claude Code in Conductor.** Locally, `new-batch-explore` reads Conductor's database and uses its `conductor://` link, and `babysitter` messages sessions by queuing them in Conductor's local database (see below). In the cloud, both use the `conductor` CLI, which needs an API token: turn on automatic API access in Conductor → Settings → General, or set `CONDUCTOR_API_KEY`. They won't work with other agents.
 - **OpenSpec** with the `/opsx:*` commands installed in the repo.
 - **GitHub and the `gh` CLI**, logged in. PRs are squash-merged into `main`.
 - **A roadmap file** for `new-batch-explore`: a `roadmap.md` (or similar) on your default branch that lists milestones with IDs, steps, and status (✅ for done, 🟡 for in progress). It skips milestones marked as waiting on someone, and it will ask you where the roadmap is if it can't find one.
@@ -60,6 +60,7 @@ These skills are opinionated. They work best if your setup looks like this:
 - It answers other sessions' questions **on your behalf**, picking the recommended option. It lists each decision so you can reverse it.
 - It **merges PRs into `main`** and **promotes to production** following your repo's documented procedure (README, CLAUDE.md/AGENTS.md, or workflows). If no procedure is documented, it stops and asks.
 - It never logs in or out of any CLI and never writes secrets to files. Setup that needs your accounts (secrets, dashboards) is handed to you as step-by-step instructions as soon as it comes up.
+- **Locally, it writes to Conductor's own database.** Conductor has no supported way to post a message into another local workspace's chat, so `babysitter` puts its messages in the same queue the app uses when you type one. They show in each workspace's chat starting with "Via Babysitter:", and so do the replies. This is undocumented: it backs up the database before the first message, and if a Conductor update breaks it, it falls back to Claude Code's `SendMessage`, which works but doesn't show in the chat. The Conductor app must be open. In the cloud, it uses the supported `conductor` CLI instead.
 
 It only runs when you type `/babysitter`; Claude won't start it by itself.
 

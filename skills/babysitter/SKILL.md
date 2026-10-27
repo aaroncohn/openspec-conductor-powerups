@@ -12,6 +12,8 @@ Fully autonomous: never wait on the user for anything a session can do or decide
 
 **Local or cloud.** If `CONDUCTOR_IS_LOCAL` is `0`, this is a cloud workspace: the other workspaces run in their own sandboxes, so read `cloud.md` (next to this file) and use it for finding the workspaces (step 1), messaging them (step 3), and watching them (step 4). Everything else is the same.
 
+**Locally**, message sessions with `conductor-local.py` (next to this file), so each message and the session's reply show in that workspace's chat. Claude's own `SendMessage` reaches the session too, but Conductor doesn't record those turns, so the workspace chat stays blank. The script queues messages in Conductor's own outbox, which is undocumented: a Conductor update can break it, so fall back to `SendMessage` when it fails (step 3).
+
 ## Options
 
 By default the babysitter goes all the way to production without asking. The user can change that after `/babysitter`, as a flag or in plain words ("ask me before prod", "stop after dev"):
@@ -52,11 +54,13 @@ git ls-tree --name-only origin/main openspec/changes/    # changes already on ma
 
 A worktree other than this one is **in scope** when `openspec/changes/` (skip `archive/`, include uncommitted files) has a change that isn't archived on `origin/main`. Worktrees without one are still exploring. Leave them alone and list them as skipped.
 
-Match each worktree to its live session with `ListAgents`: sessions are named `<workspace>-<suffix>`, where the workspace is the worktree directory's basename. The session's transcript is the newest `.jsonl` in `~/.claude/projects/<worktree path with every character that isn't a letter or digit replaced by ->/`. Read its last assistant messages to see where it stopped:
+Find each worktree's chat session (the tab open in that workspace) with `python3 <this skill's dir>/conductor-local.py session <worktree path>`. The session's transcript is the newest `.jsonl` in `~/.claude/projects/<worktree path with every character that isn't a letter or digit replaced by ->/`. Read its last assistant messages to see where it stopped:
 
 ```bash
 jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="text") | .text' <file> | tail -20
 ```
+
+Before the first message, back up Conductor's database: `sqlite3 "$CONDUCTOR_DB_PATH" ".backup '$HOME/conductor-backups/conductor-<timestamp>.db'"` (make the folder first). Tell the user where the backup is, and that your messages will appear in each workspace's chat starting with "Via Babysitter:".
 
 Also learn the repo's conventions before the first message: CI workflows and labels (which checks are quick and which are full, how the full suite is triggered), AGENTS.md / CLAUDE.md / README rules for PRs and commit authors, how past archive PRs looked (`gh pr list --state merged -L 10`), and how dev and production deploy and get verified.
 
@@ -66,9 +70,9 @@ Also learn the repo's conventions before the first message: CI workflows and lab
 
 ## 3. Brief each session
 
-Send each session one `SendMessage` with `notify_when_idle: true`. Start with a header line so the user recognises it in that workspace:
+Write each message to `.context/msg-<n>.md`, then send it with `python3 <this skill's dir>/conductor-local.py send <session id> <file>`. It waits until Conductor delivers the message (usually under 30 seconds) and exits non-zero if it wasn't delivered within 2 minutes; it withdraws the message in that case. Then fall back to `SendMessage` with `notify_when_idle: true` (find the session's name with `ListAgents`: `<workspace directory>-<suffix>`), and tell the user in the next update that this workspace's chat won't show the work. If neither reaches the session, see Rules. Start every message you send a session, this one and all later ones, with `Via Babysitter: `, so the user recognises it in that workspace. In the first one, follow it with one line on what you're driving:
 
-> (From the babysitter coordinator in workspace `<this workspace>`, on <user's name>'s behalf. I'm driving <list of changes> to merge, green CI, archive, and the production release.)
+> Via Babysitter: I'm driving <list of changes> to merge, green CI, archive, and the production release.
 
 Then answer whatever the session last stopped on (e.g. "Yes, run `/opsx:apply`", "Yes, push"), and give the rules:
 
@@ -80,15 +84,16 @@ Then answer whatever the session last stopped on (e.g. "Yes, run `/opsx:apply`",
 6. **Archive:** after the merge, open a separate openspec-only archive PR (archive + sync specs, plus whatever past archive PRs did, e.g. roadmap or notes updates) and merge it once its checks pass. If CI skips openspec-only PRs, run `openspec validate --all --strict` and merge it yourself. **Exception:** if some tasks can only be checked against a deployed environment, leave them open, and archive after the coordinator says the deploy is live.
 7. **Setup only the user can do** (secrets, dashboard settings, third-party accounts): don't block on it. Make sure nothing hard-fails without it, put the steps in the PR body under "owner setup", and tell me right away.
 8. Reply with the PR URL(s) when merged.
+9. **Log:** after each step (tasks done, tests run, PR opened, merged, archived) and each decision you made without asking, add a dated line to `.context/babysitter-log.md` in your workspace, with PR links.
 
 ## 4. Watch and keep them moving
 
-- `notify_when_idle` is one-shot. Every time a session goes idle, read the end of its transcript, check its PR (`gh pr view <n> --json state,mergeStateStatus,statusCheckRollup`), act, and subscribe again with your reply.
+- Run `python3 <this skill's dir>/conductor-local.py watch <session id> ...` in the background (Bash `run_in_background`) for every session still in flight. It exits, naming the session, when one finishes a turn. Then read the end of its transcript, check its PR (`gh pr view <n> --json state,mergeStateStatus,statusCheckRollup`), act, and start the watcher again. For a session on the `SendMessage` fallback, `notify_when_idle` does this job; it's one-shot, so subscribe again with each reply.
 - **It asked something:** answer as the user would: the recommended option, recorded as an assumption, non-blocking. If it's a real product or security call, still pick the recommended option (as a separate follow-up change if it doesn't need to block). Then tell the user in your next update: "**Decision I made for you (you can reverse it):** …".
 - **It stalled** (e.g. a long test run finished but it never woke up to read it): prod it to check the results and continue.
 - **Overlap:** when one change lands, tell the remaining sessions what moved on `main` that touches their files.
 - **A session that won't take messages** (the notice says the subscription expired, or a delivery notice says messages are held for approval): tell the user once, in the next update, and keep the others moving.
-- Don't poll `ListAgents` in a loop. Between events, end the turn with a status update. For PR checks you're waiting on, `gh pr checks <n> --watch` is fine.
+- Don't poll in a loop yourself. Between events, end the turn with a status update. For PR checks you're waiting on, `gh pr checks <n> --watch` is fine.
 
 ## 5. User setup: hand it off as soon as it's known
 
@@ -137,15 +142,19 @@ Go one item per message. Wait for the answer before sending the next. Log every 
 
 When the choices aren't a fixed set, still offer the likely answers as options. If there's truly no sensible recommendation, say why. Accept a letter, a letter plus tweaks, or a free answer.
 
-**Then the tests, in list order.** Assume the user hasn't followed the build: they don't know the new screens, flags, or test data. Testing is tedious, so make each one as quick as it can be without making it less thorough. Each message has:
-- "Test N of M", the feature it covers, and one or two lines on what changed and why it matters
-- the URL to open (a direct link to the exact page, not the home page), and the account or role to use and where its login lives
-- any setup, already done for them where possible (test data seeded, a flag turned on, a test account created), with anything left for them to do spelled out
-- numbered steps that name exactly what to click or type and where it is on the page
-- what should happen, and what a failure would look like
-- **a shortcut**, whichever fits the test best:
-  - a self-contained prompt they can paste into a browser agent (Claude in Chrome, Codex's browser extension, or similar) that runs the steps and reports pass/fail with screenshots. Include the URL, account, steps, expected result, and what to report back. Never put passwords in it.
-  - or an offer to do most of it yourself (drive it in a headless browser against dev, call the API, check the database), leaving the user only the part that needs their eyes or their logins. Say exactly which part that is.
+**Then the tests, in list order.** Assume the user hasn't followed the build: they don't know the new screens, flags, test data, or what the feature is even called in the UI. Testing is tedious, so every test message does two things: (a) gives cohesive, from-scratch instructions, and (b) offers a way to make the test faster and less annoying without making it less thorough.
+
+(a) **How to do it, from scratch.** Write it so someone who never saw the change can follow it top to bottom without guessing:
+- "Test N of M", the feature it covers, and one or two plain-language lines on what it does for the end user and why it matters
+- where to start: a direct link to the exact page (not the home page), the account or role to use, and where its login lives
+- setup, already done for them where possible (test data seeded, a flag turned on, a test account created), with anything left for them spelled out, including prerequisites like "the site must be on a paid plan" and how to get there
+- numbered steps that name exactly what to click or type and where it is on the page ("in the left sidebar, open **more**, then **add a page**"). Check the real labels and navigation in the code before writing them. Don't guess from the spec, and say so if you couldn't confirm a label.
+- what should happen at each check, quoting the exact on-screen text where there is one, and what a failure would look like
+- how to clean up afterwards (turn the setting back off, delete test data), if the test leaves anything behind
+
+(b) **A shortcut that keeps it effective.** Offer at least one, ideally both, and say how much time each saves:
+- a self-contained prompt they can paste into a browser agent (Claude in Chrome, Codex's browser extension, or similar) that runs the steps from (a) and reports pass/fail with screenshots. Include the URL, account, steps, expected results, clean-up, and what to report back. Never put real passwords in it; use throwaway test values.
+- or an offer to do most of it yourself (drive it in a headless browser, call the API, curl the live URL for status codes and headers, check the database), leaving the user only the part that needs their eyes or their logins. Say exactly which part that is and what they need to send you.
 
 Ask the user to reply "pass", "fail: <what happened>", or "skip". On a fail, ask at most one follow-up if it helps pin the bug down (a screenshot, or exactly what they clicked), then move on.
 
@@ -156,5 +165,5 @@ Ask the user to reply "pass", "fail: <what happened>", or "skip". On a fail, ask
 ## Rules
 
 - Never run `login`/`logout` for any CLI and never write secrets to files. Follow the project's account, secrets and browser-profile rules, and pass the relevant ones on to sessions when they matter.
-- Don't edit files in other worktrees yourself. The sessions own their workspaces. Exception: a session is gone or unresponsive and the work would otherwise stall. Then do the step from its worktree (`git -C <path>`), and say so in the update.
+- Don't edit files in other worktrees yourself. The sessions own their workspaces. Exception: a session is gone or unresponsive and the work would otherwise stall. Then do the step from its worktree (`git -C <path>`), log it in that worktree's `.context/babysitter-log.md` starting with `Via Babysitter: ` (tell helper agents to do the same), and say so in the update.
 - Don't rename branches, and don't archive Conductor workspaces.
