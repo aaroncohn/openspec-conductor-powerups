@@ -120,6 +120,12 @@ Then answer whatever the session last stopped on (e.g. "Yes, run `/opsx:apply`",
 - **It stalled** (e.g. a long test run finished but it never woke up to read it): prod it to check the results and continue.
 - **Overlap:** when one change lands, tell the remaining sessions what moved on `main` that touches their files.
 - **A session that won't take messages** (the notice says the subscription expired, or a delivery notice says messages are held for approval): tell the user once, in the next update, and keep the others moving.
+- **Re-scan every 10 minutes.** Run the watcher with a 10-minute background timeout (Bash `timeout: 600000`), so you're woken even when no watched session finishes a turn. After every wake-up, redo step 1's scan for every workspace of the repo, then:
+  - rename any workspace whose stage changed ("Stage in the workspace name");
+  - adopt any workspace that has newly come into scope (for example, the user just ran `/opsx:propose` or `/opsx:apply` there). Post in this chat "Babysitter is taking over <workspace name> now to keep it moving forward. You can tell me to stop babysitting it at any time.", then the status table (step 6) with the new row, then brief its session (step 3) and add it to the watcher.
+
+  If nothing changed, restart the watcher without posting.
+- **Stop babysitting:** when the user says to stop babysitting a workspace, stop messaging and watching it, mark it `stopped by user` in the state file, and don't adopt it again on a re-scan unless the user asks. Post the updated table.
 - Don't poll in a loop yourself. Between events, end the turn with a status update. For PR checks you're waiting on, `gh pr checks <n> --watch` is fine.
 
 ## 5. User setup: hand it off as soon as it's known
@@ -131,7 +137,7 @@ When a session reports setup only the user can do, don't save it for the end. In
 Keep them short and in the same shape every time:
 
 - Lead line: "**N of M merged**" plus anything newly done (with PR numbers).
-- A table or bullets, one per change: where it is and what it's waiting on.
+- A table of every workspace you're babysitting, with columns workspace (its current name), stage, and progress (where it is and what it's waiting on). Post the whole table every time, not just the rows that changed.
 - Any "Decision I made for you (you can reverse it)".
 - End with either "**Next:** <the one thing the user should do>" or "No action needed from you. I'll come back when <event>."
 

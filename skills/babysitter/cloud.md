@@ -74,6 +74,6 @@ EOF
 python3 .context/watch.py <sessionId> <sessionId> ...      # run in the background
 ```
 
-Start it just before you send a message (so the turn it triggers counts), and check sessions that were already idle when you started by reading their transcripts. When it fires, read that session's new messages, check its PR, act, and re-start the watcher for the sessions still in flight.
+Start it just before you send a message (so the turn it triggers counts), and check sessions that were already idle when you started by reading their transcripts. When it fires, read that session's new messages, check its PR, act, and re-start the watcher for the sessions still in flight. Use the same 10-minute background timeout and re-scan as in step 4 of `SKILL.md`, with section 1 above as the scan.
 
 If a session stops responding or its workspace is gone, do the step yourself from this sandbox (`git fetch origin <branch>` and work on that branch) and say so in the update.
