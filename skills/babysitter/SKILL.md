@@ -1,6 +1,6 @@
 ---
 name: babysitter
-description: Coordinate every other Conductor workspace of this repo whose OpenSpec change has been proposed, messaging their Claude sessions directly and keeping them moving until each change is built, tested, merged into main with green CI and archived, then promote main to production. Answers their questions on the user's behalf, hands the user any setup only they can do as soon as it's known, and ends with a list of things only the user can test plus decisions for a future workspace. Works in local and cloud Conductor workspaces. Run with /babysitter, optionally followed by the workspaces or milestones to cover, and --ask-before-prod or --stop-after merged|dev.
+description: Coordinate every other Conductor workspace of this repo whose OpenSpec change has been proposed, messaging their Claude sessions directly and keeping them moving until each change is built, tested, merged into main with green CI and archived, then promote main to production. Answers their questions on the user's behalf, hands the user any setup only they can do as soon as it's known, and sends decisions to revisit and tests only the user can do to separate Open Decisions and Open Tests workspaces, which present them one at a time. Works in local and cloud Conductor workspaces. Run with /babysitter, optionally followed by the workspaces or milestones to cover, and --ask-before-prod or --stop-after merged|dev.
 disable-model-invocation: true
 ---
 
@@ -40,7 +40,7 @@ Then (unless an option says to stop earlier) the latest `main` is verified on de
 If a tool for proposing a session goal is available, propose this condition with it (trimmed to match `--stop-after`, if given). Otherwise print it for the user to paste, and carry on without waiting:
 
 ```
-/goal Every workspace in .context/babysitter.md has its change merged into main and archived, full CI on main is green after the last merge, the latest main is promoted to production and verified, and the babysitter final report (things only I can test + open decisions) has been posted.
+/goal Every workspace in .context/babysitter.md has its change merged into main and archived, full CI on main is green after the last merge, the latest main is promoted to production and verified, and the babysitter final report (with the Open Decisions and Open Tests counts) has been posted.
 ```
 
 ## 1. Find the workspaces
@@ -71,11 +71,11 @@ Also learn the repo's conventions before the first message: CI workflows and lab
 
 ## 2. Keep a state file
 
-`.context/babysitter.md` has one row per change: workspace, session name, branch, change, PR, archive PR, stage (`building → testing → PR open → merged → post-merge checks → archived`), what the session is waiting on, and notes. Also keep the list of user setup tasks and decisions you made. Update it after every event. After a context compaction, re-read it before acting.
+`.context/babysitter.md` has one row per change: workspace, session name, branch, change, PR, archive PR, stage (`building → testing → PR open → merged → post-merge checks → archived`), what the session is waiting on, and notes. Also keep the list of user setup tasks, and every item sent to Open Decisions and Open Tests (step 9) with its status: open, answered, passed, failed or skipped. Update it after every event. After a context compaction, re-read it before acting.
 
 ## Stage in the workspace name
 
-Start each workspace's name with its OpenSpec stage, so the sidebar shows where it is: `explore-`, `propose-`, `apply-` or `archive-` (e.g. `m10-alerts` becomes `apply-m10-alerts`). Set it in step 1 for every workspace of the repo except this one, and rename again whenever a workspace's stage changes:
+Start each workspace's name with its OpenSpec stage, so the sidebar shows where it is: `explore-`, `propose-`, `apply-` or `archive-` (e.g. `m10-alerts` becomes `apply-m10-alerts`). Set it in step 1 for every workspace of the repo except this one and the Open Decisions and Open Tests workspaces (step 9), and rename again whenever a workspace's stage changes:
 
 | Stage | When |
 | --- | --- |
@@ -116,7 +116,7 @@ Then answer whatever the session last stopped on (e.g. "Yes, run `/opsx:apply`",
 ## 4. Watch and keep them moving
 
 - Run `python3 <this skill's dir>/conductor-local.py watch <session id> ...` in the background (Bash `run_in_background`) for every session still in flight. It exits, naming the session, when one finishes a turn. Then read the end of its transcript, check its PR (`gh pr view <n> --json state,mergeStateStatus,statusCheckRollup`), act, and start the watcher again. For a session on the `SendMessage` fallback, `notify_when_idle` does this job; it's one-shot, so subscribe again with each reply.
-- **It asked something:** answer as the user would: the recommended option, recorded as an assumption, non-blocking. If it's a real product or security call, still pick the recommended option (as a separate follow-up change if it doesn't need to block). Then tell the user in your next update: "**Decision I made for you (you can reverse it):** …".
+- **It asked something:** answer as the user would: the recommended option, recorded as an assumption, non-blocking. If it's a real product or security call, still pick the recommended option (as a separate follow-up change if it doesn't need to block). Then add it to Open Decisions (step 9) so the user can review it, and mention it in one plain line in your next update.
 - **It stalled** (e.g. a long test run finished but it never woke up to read it): prod it to check the results and continue.
 - **Overlap:** when one change lands, tell the remaining sessions what moved on `main` that touches their files.
 - **A session that won't take messages** (the notice says the subscription expired, or a delivery notice says messages are held for approval): tell the user once, in the next update, and keep the others moving.
@@ -139,10 +139,11 @@ Write them like a product manager briefing the founder: plain words about what t
 - Lead line: "**N of M merged**".
 - **Finished:** what's done since the last update, as what it does for the product's users, e.g. "The spam check is merged: suspicious contact messages now get a quick challenge instead of landing in possible spam (#191)." Skip it if nothing finished.
 - **Working on now:** one line per active workspace: the feature in words, where it is, and what's next with a rough time, e.g. "Landing page try-it demo: built and tested; opening its PR, likely merged within the hour."
-- A table with one row for every open (not archived) workspace of this repo except this one, from a fresh scan (step 1), whether you're babysitting it or not. Columns: workspace (its current name), stage, progress (where it is and what it's waiting on; for one you're not babysitting, why, e.g. "exploring", "merged and archived", "stopped by user"), and a narrow last column "babysitter monitoring?" with `x` if you're babysitting it and empty if not. Post the whole table every time, not just the rows that changed.
+- **Open decisions: N · Open tests: M**, the counts still open in those two workspaces (step 9), with one line on any answer that came back since the last update and what you did with it (e.g. "You reversed the hCaptcha keys decision; the spam-check workspace is updating it.").
+- A table with one row for every open (not archived) workspace of this repo except this one and the Open Decisions and Open Tests workspaces, from a fresh scan (step 1), whether you're babysitting it or not. Columns: workspace (its current name), stage, progress (where it is and what it's waiting on; for one you're not babysitting, why, e.g. "exploring", "merged and archived", "stopped by user"), and a narrow last column "babysitter monitoring?" with `x` if you're babysitting it and empty if not. Post the whole table every time, not just the rows that changed.
 - **Plain words everywhere:** name each feature in words, not just its roadmap ID ("2.2b, the spam check"). Leave out test counts, file names, task numbers, CI job names and internal labels unless something failed or the user has to act on them; then say what it means for the user. Don't invent codes like "C1"; describe the item.
 - **Quiet updates** (nothing finished, no stage changes) stay one or two lines in the same plain words, e.g. "Still building: the spam check is on its last tests, the landing page is waiting on review. Nothing needed from you."
-- Any "Decision I made for you (you can reverse it)".
+- Decisions you made for the user and tests only they can do don't go here: they go to Open Decisions and Open Tests (step 9). This chat is for moving work to merged and archived, plus user setup (step 5).
 - End with either "**Next:** <the one thing the user should do>" or "No action needed from you. I'll come back when <event>."
 
 ## 7. After the last merge: CI on main, dev, production
@@ -161,28 +162,49 @@ Your last message must contain everything:
 
 - **Shipped:** a table with one row per change: PR, archive PR, merged ✅, archived ✅. Then: full CI on main ✅ (run link), dev ✅, and production ✅ (commit, deploy link, URL verified, migrations applied). If an option stopped earlier, say where it stopped and what's left to release.
 - **Skipped:** workspaces not in scope, and any session that couldn't be reached.
-- **Things only you can test:** grouped by feature, as numbered steps with the URL to open.
-- **Decisions for a future workspace:** every decision made on your behalf and every "owner review" item, plus follow-ups and anything noticed along the way (e.g. an unexpected env var). Numbered, one line each.
+- **Open decisions: N · Open tests: M**, with a link or pointer to each of those workspaces, and the answers that came back and what you did with them. Don't list the items themselves here.
+- **Follow-ups:** anything noticed along the way that isn't a decision or a test (e.g. an unexpected env var). Numbered, one line each.
 - **Clean-up:** each workspace's `/safe-to-archive` verdict (✅ safe, or ⛔ with what's left), so the user knows which to archive in Conductor. If `safe-to-archive` isn't installed, say so and list the workspaces whose PRs and archive PRs are merged.
 
-End the report with decision 1 (see step 9).
+Keep watching Open Decisions and Open Tests after the report, and carry out answers as they come back (step 9). When both reach 0 and every answer is handled, post a last plain-language wrap-up. Then, if `safe-to-archive` is installed, run `/safe-to-archive` in this workspace as your final command.
 
-## 9. Walk the user through decisions, then tests
+## 9. Open Decisions and Open Tests
 
-Go one item per message. Wait for the answer before sending the next. Log every answer in the state file as you go.
+Decisions the user may want to revisit, and tests only the user can do, each go to their own Conductor workspace, so they don't get mixed into this chat's updates. The user works through them in batches, at their own pace.
 
-**Decisions first, in list order.** Each message has:
-- "Decision N of M"
+- **Open Decisions** gets every decision you or a session made on the user's behalf that they might reverse, every "owner review" item from a PR, and any question you left for the user that doesn't block merging. Send each one as soon as it's known.
+- **Open Tests** gets every test only the user can do. Send each one once its feature is live where the user can test it (dev or production), not before.
+- User setup that blocks merging or the release (secrets, accounts) stays in this chat (step 5).
+
+**Find or create the workspace.** Before sending an item, look for an open workspace of this repo named `Open Decisions` (or `Open Tests`). If there is one, send the item to its session. If there isn't (e.g. the last one was finished and archived), create a new one with the queue prompt below as its first message, then send items to it. Locally, create it the way `new-batch-explore` does (a `conductor://new` link the user confirms with Enter, then the name set in Conductor's database) and tell the user to press Enter. In the cloud, see `cloud.md`. Never stage-rename these two workspaces.
+
+**Queue prompt** (the first message of a new one; fill in this workspace's name):
+
+```
+You're the Open <Decisions|Tests> queue for /babysitter, which runs in the workspace "<this workspace's name>". It will send you <decisions the user may want to revisit|tests only the user can do>, each starting with "Via Babysitter:". Don't change code or open PRs yourself: the babysitter carries out the answers.
+
+- Present one item at a time, oldest first. Wait for the user's reply before the next. If new items arrive while one is waiting, queue them.
+- The items come from different milestones, so each one stands on its own: start with "<Decision|Test> <n> of <open count>", then the milestone and feature in plain words, the workspace it came from, and what was built and why this is open.
+- Always offer skip.
+- After each reply, write one line starting "Answered:" (or "Result:") with the item number, the reply, and anything the user added, then present the next item.
+- When the last open item is answered, post a short, warm message that makes the user feel good: what they got through, what it unblocked, and that the queue is empty. If more items arrive later, start again.
+```
+
+**Each item you send** ("Via Babysitter: add <decision|test>: …") carries everything the queue needs.
+
+For a **decision**:
+- the milestone and feature in plain words, and the workspace it came from
 - one or two lines of context: what was built and why it's open
-- lettered options (a, b, c…), each with its trade-off in a few words
+- lettered options (a, b, c…), each with its trade-off in a few words, with the current choice marked as such
 - one option marked **(recommended)** with a one-line reason
+- "skip: keep the current choice"
 
 When the choices aren't a fixed set, still offer the likely answers as options. If there's truly no sensible recommendation, say why. Accept a letter, a letter plus tweaks, or a free answer.
 
-**Then the tests, in list order.** Assume the user hasn't followed the build: they don't know the new screens, flags, test data, or what the feature is even called in the UI. Testing is tedious, so every test message does two things: (a) gives cohesive, from-scratch instructions, and (b) offers a way to make the test faster and less annoying without making it less thorough.
+For a **test**: assume the user hasn't followed the build. They don't know the new screens, flags, test data, or what the feature is even called in the UI. Testing is tedious, so every test does two things: (a) gives cohesive, from-scratch instructions, and (b) offers a way to make the test faster and less annoying without making it less thorough.
 
 (a) **How to do it, from scratch.** Write it so someone who never saw the change can follow it top to bottom without guessing:
-- "Test N of M", the feature it covers, and one or two plain-language lines on what it does for the end user and why it matters
+- the milestone and feature it covers, the workspace it came from, and one or two plain-language lines on what it does for the end user and why it matters
 - where to start: a direct link to the exact page (not the home page), the account or role to use, and where its login lives
 - setup, already done for them where possible (test data seeded, a flag turned on, a test account created), with anything left for them spelled out, including prerequisites like "the site must be on a paid plan" and how to get there
 - numbered steps that name exactly what to click or type and where it is on the page ("in the left sidebar, open **more**, then **add a page**"). Check the real labels and navigation in the code before writing them. Don't guess from the spec, and say so if you couldn't confirm a label.
@@ -191,15 +213,14 @@ When the choices aren't a fixed set, still offer the likely answers as options. 
 
 (b) **A shortcut that keeps it effective.** Offer at least one, ideally both, and say how much time each saves:
 - a self-contained prompt they can paste into a browser agent (Claude in Chrome, Codex's browser extension, or similar) that runs the steps from (a) and reports pass/fail with screenshots. Include the URL, account, steps, expected results, clean-up, and what to report back. Never put real passwords in it; use throwaway test values.
-- or an offer to do most of it yourself (drive it in a headless browser, call the API, curl the live URL for status codes and headers, check the database), leaving the user only the part that needs their eyes or their logins. Say exactly which part that is and what they need to send you.
+- or an offer to have it done for them (headless browser, API calls, curl for status codes and headers, database checks), leaving the user only the part that needs their eyes or their logins. Say exactly which part that is.
 
-Ask the user to reply "pass", "fail: <what happened>", or "skip". On a fail, ask at most one follow-up if it helps pin the bug down (a screenshot, or exactly what they clicked), then move on.
+End with: reply "pass", "fail: <what happened>", or "skip". On a fail, the queue asks at most one follow-up if it helps pin the bug down (a screenshot, or exactly what they clicked).
 
-**When both lists are done,** post a wrap-up:
-- the decisions made and the test results, with failures first
-- a self-contained brief the user can paste into a new workspace to start the follow-up change. It should cover the decisions to apply and the failures to fix, each with enough detail to act on without this conversation.
-
-Then, if `safe-to-archive` is installed, run `/safe-to-archive` in this workspace as your final command.
+**Handle the answers.** Watch both queue sessions like the others (step 4). When one posts "Answered:" or "Result:":
+- **Kept, skipped, or passed:** mark it done in the state file.
+- **Reversed decision or failed test:** send the fix to the session of the workspace where that work happened, as a normal "Via Babysitter:" brief, and drive it to merge like any other change. Its tests go back to Open Tests once the fix is live. If that workspace is gone or archived, open a follow-up the same way (a new workspace with a self-contained brief), and babysit it.
+- Report it in your next update in one plain line, and update the counts.
 
 ## Rules
 

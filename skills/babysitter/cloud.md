@@ -77,3 +77,13 @@ python3 .context/watch.py <sessionId> <sessionId> ...      # run in the backgrou
 Start it just before you send a message (so the turn it triggers counts), and check sessions that were already idle when you started by reading their transcripts. When it fires, read that session's new messages, check its PR, act, and re-start the watcher for the sessions still in flight. Use the same 10-minute background timeout and re-scan as in step 4 of `SKILL.md`, with section 1 above as the scan.
 
 If a session stops responding or its workspace is gone, do the step yourself from this sandbox (`git fetch origin <branch>` and work on that branch) and say so in the update.
+
+## 9. Creating Open Decisions and Open Tests
+
+Find them by name in `conductor workspace list --mine --repo "$REPO" --json`. To create one, write the queue prompt to a file, then:
+
+```bash
+conductor workspace create --name "Open Decisions" --branch main --agent claude --message-file .context/open-decisions.md --json
+```
+
+(`--name "Open Tests"` for the other.) Then send items with `conductor message create`, as in section 3. The queue session can't message you back: read its "Answered:" and "Result:" lines from its transcript, and watch it with the watcher in section 4.
