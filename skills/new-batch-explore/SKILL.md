@@ -54,7 +54,9 @@ Candidates: not ✅/done, and all of their steps not done. Drop any that are:
 
 Prefer roadmap order; include a partially-done 🟡 milestone only if its remaining steps are unblocked. Two is fine when the roadmap is thin; never pad to five.
 
-Show the picks as a short table (ID, name, why now, what it avoids) and anything deliberately skipped with its one-line reason. **Ask the user to confirm before creating anything.** Offer lettered alternatives if there's a genuine judgment call.
+Show the picks in a chat message, as a short table (ID, name, why now, what it avoids), followed by anything deliberately skipped with its one-line reason. Offer lettered alternatives if there's a genuine judgment call, naming each milestone by ID and name (e.g. "2.5 custom code/CSS"), never by ID alone. End the message by asking the user to reply with a letter, and **wait for that reply before creating anything.**
+
+Don't use a question or multiple-choice tool (such as AskUserQuestion) for this: its popup hides the table and the skipped list, so the user sees bare IDs with no context.
 
 ## 4. Create the workspaces
 

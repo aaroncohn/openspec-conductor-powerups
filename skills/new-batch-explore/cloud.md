@@ -11,7 +11,7 @@ REPO=$(basename -s .git "$(git remote get-url origin)")
 conductor workspace list --repo "$REPO" --json --limit 100    # page with --offset while hasMore
 ```
 
-Archived workspaces aren't listed. Names aren't enough, so for each workspace also read the first message of its sessions, which names its milestone, and its status:
+The output is `{"data": [...], "hasMore": ...}`; each workspace has `id`, `name`, `state` and `lastActivityAt`, but no branch. Archived workspaces aren't listed. Names aren't enough, so for each workspace also read the first message of its sessions, which names its milestone, and its status:
 
 ```bash
 conductor workspace session <workspaceId> --json                       # its sessions
