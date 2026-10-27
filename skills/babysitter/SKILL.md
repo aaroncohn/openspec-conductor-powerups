@@ -137,11 +137,15 @@ Go one item per message. Wait for the answer before sending the next. Log every 
 
 When the choices aren't a fixed set, still offer the likely answers as options. If there's truly no sensible recommendation, say why. Accept a letter, a letter plus tweaks, or a free answer.
 
-**Then the tests, in list order.** Each message has:
-- "Test N of M" and the feature it covers
-- the URL to open, and the account or role to use
-- numbered steps
-- what should happen
+**Then the tests, in list order.** Assume the user hasn't followed the build: they don't know the new screens, flags, or test data. Testing is tedious, so make each one as quick as it can be without making it less thorough. Each message has:
+- "Test N of M", the feature it covers, and one or two lines on what changed and why it matters
+- the URL to open (a direct link to the exact page, not the home page), and the account or role to use and where its login lives
+- any setup, already done for them where possible (test data seeded, a flag turned on, a test account created), with anything left for them to do spelled out
+- numbered steps that name exactly what to click or type and where it is on the page
+- what should happen, and what a failure would look like
+- **a shortcut**, whichever fits the test best:
+  - a self-contained prompt they can paste into a browser agent (Claude in Chrome, Codex's browser extension, or similar) that runs the steps and reports pass/fail with screenshots. Include the URL, account, steps, expected result, and what to report back. Never put passwords in it.
+  - or an offer to do most of it yourself (drive it in a headless browser against dev, call the API, check the database), leaving the user only the part that needs their eyes or their logins. Say exactly which part that is.
 
 Ask the user to reply "pass", "fail: <what happened>", or "skip". On a fail, ask at most one follow-up if it helps pin the bug down (a screenshot, or exactly what they clicked), then move on.
 
