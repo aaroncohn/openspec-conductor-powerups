@@ -63,11 +63,32 @@ jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="text") 
 
 Before the first message, back up Conductor's database: `sqlite3 "$CONDUCTOR_DB_PATH" ".backup '$HOME/conductor-backups/conductor-<timestamp>.db'"` (make the folder first). Tell the user where the backup is, and that your messages will appear in each workspace's chat starting with "Via Babysitter:".
 
+Then put each workspace's stage in its name (see "Stage in the workspace name"), skipped ones included.
+
 Also learn the repo's conventions before the first message: CI workflows and labels (which checks are quick and which are full, how the full suite is triggered), AGENTS.md / CLAUDE.md / README rules for PRs and commit authors, how past archive PRs looked (`gh pr list --state merged -L 10`), and how dev and production deploy and get verified.
 
 ## 2. Keep a state file
 
 `.context/babysitter.md` has one row per change: workspace, session name, branch, change, PR, archive PR, stage (`building → testing → PR open → merged → post-merge checks → archived`), what the session is waiting on, and notes. Also keep the list of user setup tasks and decisions you made. Update it after every event. After a context compaction, re-read it before acting.
+
+## Stage in the workspace name
+
+Start each workspace's name with its OpenSpec stage, so the sidebar shows where it is: `explore-`, `propose-`, `apply-` or `archive-` (e.g. `m10-alerts` becomes `apply-m10-alerts`). Set it in step 1 for every workspace of the repo except this one, and rename again whenever a workspace's stage changes:
+
+| Stage | When |
+| --- | --- |
+| `explore` | no change in `openspec/changes/` that isn't archived on `origin/main` |
+| `propose` | it has a change, but `openspec status --change <name>` (run in its worktree) isn't planning-complete |
+| `apply` | planning is complete, until its PR is merged |
+| `archive` | its PR is merged; it keeps this prefix after the archive PR merges |
+
+Remove any earlier stage prefix before adding the new one, so prefixes never stack, and leave the rest of the name alone. Record the stage in the state file. Locally, rename the way a manual rename in the sidebar does (Conductor's database, backed up above):
+
+```bash
+sqlite3 "$CONDUCTOR_DB_PATH" "update workspaces set workspace_name='<new name>', user_set_workspace_name=1 where workspace_path='<worktree path>'"
+```
+
+In the cloud, see `cloud.md`. If a rename doesn't stick, say so once in the next update and carry on.
 
 ## 3. Brief each session
 

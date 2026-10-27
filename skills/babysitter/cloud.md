@@ -30,6 +30,10 @@ for m in json.load(sys.stdin)["data"]:
             if c.get("type") == "text": print(c["text"])' | tail -20
 ```
 
+## Stage in the workspace name
+
+Rename with `conductor workspace rename <workspaceId> --name <new name>`, starting from the name `workspace list` shows. You can't run `openspec status` in another sandbox, so judge `propose` versus `apply` from its pushed branch (the change has a `tasks.md`) or its transcript (it finished `/opsx:propose`).
+
 ## 3. Messaging a session
 
 Write each message to a file first (it avoids shell quoting problems), then send it:
