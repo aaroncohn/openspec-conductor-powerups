@@ -63,7 +63,7 @@ jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="text") 
 
 Before the first message, back up Conductor's database: `sqlite3 "$CONDUCTOR_DB_PATH" ".backup '$HOME/conductor-backups/conductor-<timestamp>.db'"` (make the folder first). Tell the user where the backup is, and that your messages will appear in each workspace's chat starting with "Via Babysitter:".
 
-Then name this workspace `Babysitter Command`, so the user can find it in the sidebar: the same `sqlite3` update as in "Stage in the workspace name", with this worktree's path.
+Then name this workspace `Babysitter HQ`, so the user can find it in the sidebar: the same `sqlite3` update as in "Stage in the workspace name", with this worktree's path.
 
 Then put each workspace's stage in its name (see "Stage in the workspace name"), skipped ones included.
 
