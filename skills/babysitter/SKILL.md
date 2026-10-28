@@ -79,10 +79,10 @@ Also learn the repo's conventions before the first message: CI workflows and lab
 
 `.context/babysitter.md` has one row per change: workspace, session name, branch, change, PR, archive PR, stage (`building → testing → PR open → merged → post-merge checks → archived`), what the session is waiting on, and notes. Also keep every item sent to Open Decisions, Open Tests and Open Actions (step 9) with its status: open, answered, passed, failed, done, or skipped. Update it after every event. After a context compaction, re-read it before acting.
 
-**Times are in the user's timezone.** Every time you write, in this chat, in messages to sessions and queues, in the state file and in logs, is in the user's timezone, 12-hour with the zone's current abbreviation: "7:45 pm EDT", never UTC. Work out the zone once, at the start, and keep its name in the state file (e.g. `America/New_York`):
+**Times are in the user's timezone.** Every time you write, in this chat, in messages to sessions and queues, in the state file and in logs, is in the user's timezone, 12-hour with the zone's current abbreviation: "7:45 pm EDT", never UTC. Work out the zone once, before you first write a time (also when you switch to this skill partway through a run), and keep its name in the state file (e.g. `America/New_York`):
 
 - **Locally:** the Mac's zone, from `readlink /etc/localtime` (it ends in the name).
-- **In the cloud:** the sandbox runs on UTC. Use a timezone the project's `AGENTS.md`/`CLAUDE.md` names. Otherwise ask the user once, in your first message ("What timezone are you in? e.g. New York"), and use UTC, labelled UTC, until they answer.
+- **In the cloud:** the sandbox's clock is on UTC, which is never the user's zone. Use a timezone the project's `AGENTS.md`/`CLAUDE.md` names. Otherwise ask the user right away, in its own short message: "What timezone are you in, so I can give times in it? e.g. New York". Until they answer, say times relative to now ("in about an hour"). Once they answer, suggest adding a line like `Timezone: America/New_York` to `AGENTS.md`, so the next run doesn't ask.
 
 Get the current time with `TZ=<zone> date '+%-I:%M %p %Z' | sed 's/AM/am/;s/PM/pm/'`. The abbreviation follows daylight saving by itself (EDT in summer, EST in winter).
 
@@ -167,8 +167,11 @@ The user wants to know, regularly, that everything is moving: what just got done
 - a workspace is `⚠️ STOPPED` (step 4)
 - something broke that the user would want to know about now: full CI on `main` fails, a deploy fails, production is rolled back
 - production is ready to go and needs the user's go (step 7.4)
+- in the cloud, the one-time question about the user's timezone (step 2)
 
 Everything else waits for the next digest: a PR opened, a merge, an archive, an adopted workspace, a rename, an answer from a queue, and anything you told a session to do. Never post a message of its own just to say that nothing needs the user, when the next digest is, what you checked, or what you asked a session to do ("I'm asking that session to renumber", "Restarted the watcher", "The other three are still testing").
+
+**Don't say what didn't happen**, in a digest or anywhere else in this chat: no "Nothing needs you right now", "No answers since the last digest" or "Nothing new on the others". Leave that part out; a missing part means there's nothing to report.
 
 **Digests**, as if the user walked into the room and asked "what's the latest on all this?". Post one when the user asks, and otherwise about every hour (or at whatever interval the user asked for) if something changed since the last one. Note the time of each in the state file. If nothing changed, skip it. In this order:
 
