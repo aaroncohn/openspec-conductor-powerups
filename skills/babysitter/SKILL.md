@@ -79,6 +79,13 @@ Also learn the repo's conventions before the first message: CI workflows and lab
 
 `.context/babysitter.md` has one row per change: workspace, session name, branch, change, PR, archive PR, stage (`building → testing → PR open → merged → post-merge checks → archived`), what the session is waiting on, and notes. Also keep every item sent to Open Decisions, Open Tests and Open Actions (step 9) with its status: open, answered, passed, failed, done, or skipped. Update it after every event. After a context compaction, re-read it before acting.
 
+**Times are in the user's timezone.** Every time you write, in this chat, in messages to sessions and queues, in the state file and in logs, is in the user's timezone, 12-hour with the zone's current abbreviation: "7:45 pm EDT", never UTC. Work out the zone once, at the start, and keep its name in the state file (e.g. `America/New_York`):
+
+- **Locally:** the Mac's zone, from `readlink /etc/localtime` (it ends in the name).
+- **In the cloud:** the sandbox runs on UTC. Use a timezone the project's `AGENTS.md`/`CLAUDE.md` names. Otherwise ask the user once, in your first message ("What timezone are you in? e.g. New York"), and use UTC, labelled UTC, until they answer.
+
+Get the current time with `TZ=<zone> date '+%-I:%M %p %Z' | sed 's/AM/am/;s/PM/pm/'`. The abbreviation follows daylight saving by itself (EDT in summer, EST in winter).
+
 ## Stage in the workspace name
 
 Start each workspace's name with its OpenSpec stage, so the sidebar shows where it is: `explore-`, `propose-`, `apply-` or `archive-` (e.g. `m10-alerts` becomes `apply-m10-alerts`). Set it in step 1 for every workspace of the repo except this one and the Open Decisions, Open Tests and Open Actions workspaces (step 9), and rename again whenever a workspace's stage changes:
@@ -116,7 +123,7 @@ Then answer whatever the session last stopped on (e.g. "Yes, run `/opsx:apply`",
 6. **Archive:** after the merge, run `/opsx:archive` (sync the specs) and open its result as a separate openspec-only archive PR ( plus whatever past archive PRs did, e.g. roadmap or notes updates) and merge it once its checks pass. If CI skips openspec-only PRs, run `openspec validate --all --strict` and merge it yourself. **Exception:** if some tasks can only be checked against a deployed environment, leave them open, and archive after the coordinator says the deploy is live.
 7. **Setup only the user can do** (secrets, dashboard settings, third-party accounts): don't block on it unless it's truly blocking (see below). Make sure nothing hard-fails without it, put the steps in the PR body under "owner setup", and tell me right away.
 8. Reply with the PR URL(s) when merged.
-9. **Log:** after each step (tasks done, tests run, PR opened, merged, archived) and each decision you made without asking, add a dated line to `.context/babysitter-log.md` in your workspace, with PR links.
+9. **Log:** after each step (tasks done, tests run, PR opened, merged, archived) and each decision you made without asking, add a line, dated in the user's timezone (<the zone, e.g. `America/New_York`>), to `.context/babysitter-log.md` in your workspace, with PR links.
 10. **Last:** once the archive PR is merged, if the `safe-to-archive` skill is installed (in your skill list as `safe-to-archive`, or `powerups:safe-to-archive` as a plugin), run `/safe-to-archive` as your final command. Fix any blocker that's your own work (e.g. commit and push), run it again, and reply with its verdict. Don't archive the workspace.
 
 ## 4. Watch and keep them moving
@@ -170,7 +177,7 @@ Everything else (a test passing, a PR opened, a merge, an archive, an adopted wo
 - **What your product gained:** a bullet for each feature that merged or went live since the last digest, written as what users can now do and why it's better, in plain, warm words, e.g. "Visitors can message you from your site. Suspicious messages get a quick human check instead of landing in your inbox (#191)." This is the part the user reads to feel the progress, so make it concrete and give each one its due.
 - **In progress:** one line per active workspace: the feature in words, where it is, what's next, and a rough time.
 - **Open actions: K · Open decisions: N · Open tests: M**, the counts in those three workspaces (step 9), plus one line on any answer that came back and what you did with it.
-- End with "**Next:** <the one thing the user should do>" or "Nothing needed from you. Next digest around <time>."
+- End with "**Next:** <the one thing the user should do>" or "Nothing needed from you. Next digest around <time>, if anything changes." (e.g. "around 7:45 pm EDT, if anything changes")
 
 **Plain words everywhere:** name each feature in words, not just its roadmap ID ("2.2b, the spam check"). Leave out test counts, file names, task numbers, CI job names and internal labels unless something failed or the user has to act on them; then say what it means for the user. Don't invent codes like "C1"; describe the item.
 
