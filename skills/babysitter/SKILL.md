@@ -102,13 +102,13 @@ Then say that the user started this run with `/babysitter` in <this workspace>, 
 
 Then answer whatever the session last stopped on (e.g. "Yes, run `/opsx:apply`", "Yes, push"), and give the rules:
 
-1. **Keep going without asking.** Finish every task, run the review and tests, then push and open the PR. If you'd normally stop to ask, pick the recommended option, record it as an assumption in the change artifacts, list it in the PR body under "owner review", and continue.
+1. **Keep going without asking.** Finish every task, run the review and tests, then push and open the PR. If you'd normally stop to ask, decide whether it's blocking (see "Blocking or batch" below). Most aren't: pick the recommended option, record it as an assumption in the change artifacts, list it in the PR body under "owner review", and continue. If it truly is blocking, ask the user here, in this workspace, wait for their answer, and tell me you're waiting.
 2. **Test as much as possible.** Run the checks CI runs. Add tests for new behaviour. Run the expensive suites locally (db, e2e, etc.) and list in the PR body which ran and which couldn't. For UI changes, drive the flows in a browser. List what only the user can test, with steps.
 3. **PR:** follow the repo's conventions (title, body sections, commit author, CI labels). Request only quick checks if the repo separates them and you ran the heavy suites locally.
 4. **Merge:** once quick checks are green, rebase on the latest `origin/main` (other milestones may have landed), re-run the checks affected by the rebase, then `gh pr merge --squash`. Resolve conflicts keeping both sides, and tell me what you touched. Add specific warnings about files you know another workspace also changes (e.g. "the build number moved on main: use main's value + 1").
 5. **Don't** run the full CI suite on main or touch production: the coordinator does that once everything is in.
 6. **Archive:** after the merge, run `/opsx:archive` (sync the specs) and open its result as a separate openspec-only archive PR ( plus whatever past archive PRs did, e.g. roadmap or notes updates) and merge it once its checks pass. If CI skips openspec-only PRs, run `openspec validate --all --strict` and merge it yourself. **Exception:** if some tasks can only be checked against a deployed environment, leave them open, and archive after the coordinator says the deploy is live.
-7. **Setup only the user can do** (secrets, dashboard settings, third-party accounts): don't block on it. Make sure nothing hard-fails without it, put the steps in the PR body under "owner setup", and tell me right away.
+7. **Setup only the user can do** (secrets, dashboard settings, third-party accounts): don't block on it unless it's truly blocking (see below). Make sure nothing hard-fails without it, put the steps in the PR body under "owner setup", and tell me right away.
 8. Reply with the PR URL(s) when merged.
 9. **Log:** after each step (tasks done, tests run, PR opened, merged, archived) and each decision you made without asking, add a dated line to `.context/babysitter-log.md` in your workspace, with PR links.
 10. **Last:** once the archive PR is merged, if the `safe-to-archive` skill is installed (in your skill list as `safe-to-archive`, or `openspec-conductor-powerups:safe-to-archive` as a plugin), run `/safe-to-archive` as your final command. Fix any blocker that's your own work (e.g. commit and push), run it again, and reply with its verdict. Don't archive the workspace.
@@ -116,8 +116,9 @@ Then answer whatever the session last stopped on (e.g. "Yes, run `/opsx:apply`",
 ## 4. Watch and keep them moving
 
 - Run `python3 <this skill's dir>/conductor-local.py watch <session id> ...` in the background (Bash `run_in_background`) for every session still in flight. It exits, naming the session, when one finishes a turn. Then read the end of its transcript, check its PR (`gh pr view <n> --json state,mergeStateStatus,statusCheckRollup`), act, and start the watcher again. For a session on the `SendMessage` fallback, `notify_when_idle` does this job; it's one-shot, so subscribe again with each reply.
-- **It asked something:** answer as the user would: the recommended option, recorded as an assumption, non-blocking. If it's a real product or security call, still pick the recommended option (as a separate follow-up change if it doesn't need to block). Then add it to Open Decisions (step 9) so the user can review it, and mention it in one plain line in your next update.
+- **It asked something:** first decide whether it's blocking ("Blocking or batch" below). If not, answer as the user would: the recommended option, recorded as an assumption. Then add it to Open Decisions (step 9) so the user can review it later, and mention it in one plain line in your next update. If it is blocking, tell the session to ask the user in its own workspace and wait, and remind the user in every update until it's answered (step 6).
 - **It stalled** (e.g. a long test run finished but it never woke up to read it): prod it to check the results and continue.
+- **Stay on the latest `main`:** after every merge into `main` (a change or an archive PR), update this workspace: `git fetch origin -q` and `git merge --ff-only origin/main` (or `git pull --ff-only`). You never commit here, so it should fast-forward; if it can't, check out `origin/main` detached instead. Read specs, the roadmap and code from this up-to-date copy.
 - **Overlap:** when one change lands, tell the remaining sessions what moved on `main` that touches their files.
 - **A session that won't take messages** (the notice says the subscription expired, or a delivery notice says messages are held for approval): tell the user once, in the next update, and keep the others moving.
 - **Re-scan every 10 minutes.** Run the watcher with a 10-minute background timeout (Bash `timeout: 600000`), so you're woken even when no watched session finishes a turn. After every wake-up, redo step 1's scan for every workspace of the repo, then:
@@ -128,15 +129,28 @@ Then answer whatever the session last stopped on (e.g. "Yes, run `/opsx:apply`",
 - **Stop babysitting:** when the user says to stop babysitting a workspace, stop messaging and watching it, mark it `stopped by user` in the state file, and don't adopt it again on a re-scan unless the user asks. Post the updated table.
 - Don't poll in a loop yourself. Between events, end the turn with a status update. For PR checks you're waiting on, `gh pr checks <n> --watch` is fine.
 
+## Blocking or batch
+
+The goal is speed without lowering quality. So most decisions and actions don't stop the work: the recommended option is taken now and the user reviews it later, in batches. Only a few are blocking.
+
+**Blocking** means getting it wrong would change what gets built in a way that's costly to undo, so it has to be settled before the work goes on. Examples:
+- a decision about scope, the data model or a migration, pricing or money, security or privacy, or something users will see that's hard to change once it ships
+- an action without which the work can't be built or tested at all, with no safe stand-in (a stub, a test key, a feature flag)
+
+**Batch** is everything else: copy, naming, small UX choices, defaults that are easy to change later, follow-ups, and actions the work can ship without (it degrades gracefully until they're done). Batch items go to Open Decisions or Open Actions (step 9), and any change they lead to goes in a future PR.
+
+When unsure, prefer batch if the choice can be reversed in a small later PR; otherwise blocking. A blocking item stays in the workspace where it came up: its session asks the user there and waits, while the other workspaces keep going. Record each blocking item in the state file with its workspace.
+
 ## 5. User actions: send them to Open Actions as soon as they're known
 
-When a session reports something only the user can do that isn't a decision or a test (an environment variable or secret to set, an account to create, a payment method to add, a dashboard setting, a DNS record), don't save it for the end. Send it to Open Actions (step 9) right away. Plan the production release so it waits for actions production needs, or confirm that nothing breaks without them.
+When a session reports something only the user can do that isn't a decision or a test (an environment variable or secret to set, an account to create, a payment method to add, a dashboard setting, a DNS record), don't save it for the end. If it's blocking ("Blocking or batch"), it stays in that workspace and you remind the user (step 6). Otherwise send it to Open Actions (step 9) right away. Plan the production release so it waits for actions production needs, or confirm that nothing breaks without them.
 
 ## 6. Status updates
 
 Write them like a product manager briefing the founder: plain words about what the product gained, not a build log. Keep them short and in the same shape every time:
 
 - Lead line: "**N of M merged**".
+- **Waiting on you:** while any blocking decision or action is open, one plain line each, every update, right after the lead line: what it is, why it holds things up, and the workspace to answer it in, e.g. "m2.4-custom-component needs your call on whether custom components can load outside scripts; it's paused until you answer there." Leave it out when there are none.
 - **Finished:** what's done since the last update, as what it does for the product's users, e.g. "The spam check is merged: suspicious contact messages now get a quick challenge instead of landing in possible spam (#191)." Skip it if nothing finished.
 - **Working on now:** one line per active workspace: the feature in words, where it is, and what's next with a rough time, e.g. "Landing page try-it demo: built and tested; opening its PR, likely merged within the hour."
 - **Open actions: K · Open decisions: N · Open tests: M**, the counts still open in those three workspaces (step 9). If an open action is holding up a merge or the release, say which one in plain words. with one line on any answer that came back since the last update and what you did with it (e.g. "You reversed the hCaptcha keys decision; the spam-check workspace is updating it.").
@@ -172,9 +186,9 @@ Keep watching Open Actions, Open Decisions and Open Tests after the report, and 
 
 Actions only the user can do, decisions the user may want to revisit, and tests only the user can do each go to their own Conductor workspace, so they don't get mixed into this chat's updates. The user works through them in batches, at their own pace.
 
-- **Open Decisions** gets every decision you or a session made on the user's behalf that they might reverse, every "owner review" item from a PR, and any question you left for the user that doesn't block merging. Send each one as soon as it's known.
+- **Open Decisions** gets every decision you or a session made on the user's behalf that they might reverse, every "owner review" item from a PR, and any question you left for the user, as long as it's batch, not blocking ("Blocking or batch"). Send each one as soon as it's known.
 - **Open Tests** gets every test only the user can do. Send each one once its feature is live where the user can test it (dev or production), not before.
-- **Open Actions** gets every action only the user can do that isn't a decision or a test (step 5): secrets and environment variables, accounts, payment methods, dashboard settings, DNS. Send each one as soon as it's known. Ones that hold up a merge or the release go first.
+- **Open Actions** gets every action only the user can do that isn't a decision or a test (step 5): secrets and environment variables, accounts, payment methods, dashboard settings, DNS, as long as it's batch, not blocking. Send each one as soon as it's known. Ones the release waits on go first.
 
 **Find or create the workspace.** Before sending an item, look for an open workspace of this repo named `Open Actions`, `Open Decisions` or `Open Tests`. If there is one, send the item to its session. If there isn't (e.g. the last one was finished and archived), create a new one with the queue prompt below as its first message, then send items to it. Locally, create it the way `new-batch-explore` does (a `conductor://new` link the user confirms with Enter, then the name set in Conductor's database) and tell the user to press Enter. In the cloud, see `cloud.md`. Never stage-rename these three workspaces.
 
