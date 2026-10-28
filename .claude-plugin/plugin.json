@@ -1,7 +1,7 @@
 {
   "name": "openspec-conductor-powerups",
   "description": "Opinionated skills for running OpenSpec changes across parallel Conductor workspaces: start a batch, ship it, clean up.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": {
     "name": "Aaron Cohn",
     "url": "https://aaroncohn.com"
