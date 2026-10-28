@@ -9,8 +9,9 @@ be open. Back up first:  sqlite3 "$CONDUCTOR_DB_PATH" ".backup '<file>'"
   conductor-local.py session <worktree path>          print the workspace's chat session id
   conductor-local.py send <session id> <message file> queue the message, wait until it's delivered
   conductor-local.py watch <session id> ...           block until one of them finishes a turn
+  conductor-local.py scan                              one JSON line per open workspace of this repo (read-only)
 """
-import datetime, json, os, sqlite3, sys, time, uuid
+import datetime, glob, json, os, sqlite3, subprocess, sys, time, uuid
 
 DB = os.environ.get("CONDUCTOR_DB_PATH") or os.path.expanduser(
     "~/Library/Application Support/com.conductor.app/conductor.db")
@@ -69,6 +70,60 @@ def watch(session_ids):
                 return
 
 
+def stage(changes, pr_state):
+    # changes: [(name, planning_complete)]; pr_state: "OPEN", "MERGED", "CLOSED" or None
+    if pr_state == "MERGED":
+        return "archive"
+    if not changes:
+        return "explore"
+    return "apply" if all(done for _, done in changes) else "propose"
+
+
+def check_stage():
+    assert stage([], None) == "explore"
+    assert stage([("a", False)], None) == "propose"
+    assert stage([("a", True)], "OPEN") == "apply"
+    assert stage([("a", True)], "MERGED") == "archive"
+
+
+def out(args, cwd):
+    try:
+        r = subprocess.run(args, cwd=cwd, capture_output=True, text=True, timeout=60)
+        return r.stdout if r.returncode == 0 else ""
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+def scan():
+    if not os.path.exists(DB):
+        sys.exit(f"no Conductor database at {DB}; use the manual commands in SKILL.md step 1")
+    root = out(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], ".").strip()
+    root = os.path.dirname(root)  # the main checkout, which Conductor stores as the repo's root_path
+    db = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
+    rows = db.execute(
+        "select w.workspace_name, w.workspace_path, w.branch, w.active_session_id, ifnull(s.status, '')"
+        " from workspaces w left join sessions s on s.id = w.active_session_id"
+        " where w.repository_id = (select id from repos where root_path = ?) and w.state != 'archived'",
+        (root,)).fetchall()
+    archived = {os.path.basename(p).split("-", 3)[-1] for p in
+                out(["git", "ls-tree", "--name-only", "origin/main", "openspec/changes/archive/"], ".").split()}
+    for name, path, branch, session_id, status in rows:
+        changes = []
+        for d in sorted(glob.glob(os.path.join(path or "", "openspec/changes/*/"))):
+            change = os.path.basename(d.rstrip("/"))
+            if change == "archive" or change in archived:
+                continue
+            st = out(["openspec", "status", "--change", change, "--json"], path)
+            done = json.loads(st).get("isPlanningComplete") if st else os.path.exists(os.path.join(d, "tasks.md"))
+            changes.append((change, bool(done)))
+        prs = json.loads(out(["gh", "pr", "list", "--head", branch or "", "--state", "all", "--json",
+                              "number,state"], path) or "[]") if branch else []
+        pr = prs[0] if prs else None
+        print(json.dumps({"name": name, "path": path, "branch": branch, "session": session_id,
+                          "status": status, "changes": [c for c, _ in changes], "pr": pr,
+                          "stage": stage(changes, pr and pr["state"])}))
+
+
 if __name__ == "__main__":
     cmd, args = (sys.argv[1], sys.argv[2:]) if len(sys.argv) > 1 else ("", [])
     if cmd == "session" and len(args) == 1:
@@ -77,5 +132,8 @@ if __name__ == "__main__":
         send(*args)
     elif cmd == "watch" and args:
         watch(args)
+    elif cmd == "scan" and not args:
+        check_stage()
+        scan()
     else:
         sys.exit(__doc__)

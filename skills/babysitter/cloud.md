@@ -45,7 +45,7 @@ conductor message create --session <sessionId> --message-file .context/msg-<n>.m
 The `Via Babysitter: ` prefix and rules from step 3 still apply. These messages show in the workspace's chat. Two cloud additions for the rules:
 
 - Sessions can't message you back. Tell them to put anything you need (PR URL, questions, setup only the user can do) in their final reply, where you'll read it.
-- Anything that needs the user's own machine (their browser and its logins, local files) can't be done from the cloud. Treat it as a user action (step 5), and write any browser prompt for the user's **local** browser.
+- Anything that needs the user's own machine (their browser and its logins, local files) can't be done from the cloud. Treat it as a user action (step 5), and write any browser prompt for the user's **local** browser, with the `browser-handoff` skill if it's installed.
 
 ## 4. Watching them
 

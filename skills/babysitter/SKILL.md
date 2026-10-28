@@ -10,6 +10,8 @@ The user has finished `/opsx:explore` and `/opsx:propose` in one or more other C
 
 Fully autonomous: never wait on the user for anything a session can do or decide. Only actions that need the user's own accounts go to the user (see step 5), and blocking decisions wait for them ("Blocking or batch"); so does production, unless `--auto-prod` was given.
 
+**Who "the user" is.** The person who ran `/babysitter`. If the project names more than one owner (in `AGENTS.md`/`CLAUDE.md`, or in the docs they point to), each `⚠️ BLOCKED` item and each Open Actions, Open Decisions or Open Tests item says who should answer it when that's clear (for example, the owner of that area, or the person who made the original decision). When it isn't clear, it's the person who ran `/babysitter`.
+
 **Local or cloud.** If `CONDUCTOR_IS_LOCAL` is `0`, this is a cloud workspace: the other workspaces run in their own sandboxes, so read `cloud.md` (next to this file) and use it for finding the workspaces (step 1), messaging them (step 3), and watching them (step 4). Everything else is the same.
 
 **Locally**, message sessions with `conductor-local.py` (next to this file), so each message and the session's reply show in that workspace's chat. Claude's own `SendMessage` reaches the session too, but Conductor doesn't record those turns, so the workspace chat stays blank. The script queues messages in Conductor's own outbox, which is undocumented: a Conductor update can break it, so fall back to `SendMessage` when it fails (step 3).
@@ -50,13 +52,14 @@ If the user named workspaces or milestones after `/babysitter`, cover exactly th
 
 ```bash
 git fetch origin -q
-git worktree list --porcelain                            # every Conductor workspace of this repo
-git ls-tree --name-only origin/main openspec/changes/    # changes already on main
+python3 <this skill's dir>/conductor-local.py scan    # one JSON line per open workspace of this repo
 ```
+
+Each line has the workspace's name, path, branch, chat session id and status, its OpenSpec changes that aren't archived on `origin/main`, its PR (number and state), and its stage (see "Stage in the workspace name"). It only reads Conductor's database. If it fails, fall back to `git worktree list --porcelain` and `git ls-tree --name-only origin/main openspec/changes/archive/`, and work these out by hand.
 
 A worktree other than this one is **in scope** when `openspec/changes/` (skip `archive/`, include uncommitted files) has a change that isn't archived on `origin/main`. It's also in scope when it has work that isn't on `origin/main` (uncommitted changes, an open PR, or commits whose content isn't on `origin/main`), or when its session last stopped asking whether to commit, open a PR or merge: drive that work to merge too. Other worktrees are still exploring. Leave them alone and list them as skipped.
 
-Find each worktree's chat session (the tab open in that workspace) with `python3 <this skill's dir>/conductor-local.py session <worktree path>`. The session's transcript is the newest `.jsonl` in `~/.claude/projects/<worktree path with every character that isn't a letter or digit replaced by ->/`. Read its last assistant messages to see where it stopped:
+The scan gives each worktree's chat session (the tab open in that workspace); for one workspace, `python3 <this skill's dir>/conductor-local.py session <worktree path>` does the same. The session's transcript is the newest `.jsonl` in `~/.claude/projects/<worktree path with every character that isn't a letter or digit replaced by ->/`. Read its last assistant messages to see where it stopped:
 
 ```bash
 jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="text") | .text' <file> | tail -20
@@ -85,7 +88,7 @@ Start each workspace's name with its OpenSpec stage, so the sidebar shows where 
 | `apply` | planning is complete, until its PR is merged |
 | `archive` | its PR is merged; it keeps this prefix after the archive PR merges |
 
-Remove any earlier stage prefix before adding the new one, so prefixes never stack, and leave the rest of the name alone. Record the stage in the state file. Locally, rename the way a manual rename in the sidebar does (Conductor's database, backed up above):
+Locally, `conductor-local.py scan` works the stage out for you (step 1). Remove any earlier stage prefix before adding the new one, so prefixes never stack, and leave the rest of the name alone. Record the stage in the state file. Locally, rename the way a manual rename in the sidebar does (Conductor's database, backed up above):
 
 ```bash
 sqlite3 "$CONDUCTOR_DB_PATH" "update workspaces set workspace_name='<new name>', user_set_workspace_name=1 where workspace_path='<worktree path>'"
@@ -224,7 +227,7 @@ For an **action**:
 - why it's needed and what happens until it's done (e.g. "until then, suspicious messages keep going to possible spam")
 - directions from scratch: the exact service and account (and to confirm the signed-in account first), a direct link to the right page, numbered steps naming what to click, and what "done" looks like
 - the project's rules that apply (e.g. paste secrets into the service's web UI, never into chat; stay on free plans unless the user says otherwise)
-- when a browser can do most of it, a self-contained prompt to paste into a browser agent (Claude in Chrome or similar), with goal, exact account, steps, done-when, don't-touch and report-back (use a handoff-block skill if the repo has one). Never put passwords or secrets in it.
+- when a browser can do most of it, a self-contained prompt to paste into a browser agent (Claude in Chrome or similar), with goal, exact account, steps, done-when, don't-touch and report-back (if the `browser-handoff` skill is installed, write it with that skill). Never put passwords or secrets in it.
 - what to reply when done: "done", plus anything the babysitter needs back (e.g. a public key or ID, never a secret), or "skip"
 
 For a **decision**:
@@ -247,7 +250,7 @@ For a **test**: assume the user hasn't followed the build. They don't know the n
 - how to clean up afterwards (turn the setting back off, delete test data), if the test leaves anything behind
 
 (b) **A shortcut that keeps it effective.** Offer at least one, ideally both, and say how much time each saves:
-- a self-contained prompt they can paste into a browser agent (Claude in Chrome, Codex's browser extension, or similar) that runs the steps from (a) and reports pass/fail with screenshots. Include the URL, account, steps, expected results, clean-up, and what to report back. Never put real passwords in it; use throwaway test values.
+- a self-contained prompt they can paste into a browser agent (Claude in Chrome, Codex's browser extension, or similar) that runs the steps from (a) and reports pass/fail with screenshots. Include the URL, account, steps, expected results, clean-up, and what to report back. Never put real passwords in it; use throwaway test values. If the `browser-handoff` skill is installed, write it with that skill.
 - or an offer to have it done for them (headless browser, API calls, curl for status codes and headers, database checks), leaving the user only the part that needs their eyes or their logins. Say exactly which part that is.
 
 End with: reply "pass", "fail: <what happened>", or "skip". On a fail, the queue asks at most one follow-up if it helps pin the bug down (a screenshot, or exactly what they clicked).
