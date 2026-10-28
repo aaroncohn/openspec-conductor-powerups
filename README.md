@@ -29,21 +29,41 @@ In Claude Code:
 
 ```
 /plugin marketplace add aaroncohn/openspec-conductor-powerups
-/plugin install openspec-conductor-powerups@openspec-conductor-powerups
+/plugin install powerups@openspec-conductor-powerups
 ```
 
-Installed as a plugin, the skills get the plugin's name as a prefix: `/openspec-conductor-powerups:babysitter`, and so on. Run `/plugin marketplace update` to get new versions.
+The skills are then `/powerups:babysitter`, `/powerups:new-batch-explore`, and so on.
 
-If you'd rather have short names (`/babysitter`), copy the folders instead:
+**Stay on the latest version.** There's no version number: every commit to `main` is a release. Turn on auto-update once and Claude Code picks up new commits in the background after a session starts: in `/plugin`, open **Marketplaces**, pick `openspec-conductor-powerups`, and choose **Enable auto-update**. Or add it to `~/.claude/settings.json`:
+
+```json
+"extraKnownMarketplaces": {
+  "openspec-conductor-powerups": {
+    "source": { "source": "github", "repo": "aaroncohn/openspec-conductor-powerups" },
+    "autoUpdate": true
+  }
+},
+"enabledPlugins": { "powerups@openspec-conductor-powerups": true }
+```
+
+Without auto-update, run `/plugin marketplace update openspec-conductor-powerups`.
+
+**For cloud workspaces**, a cloud sandbox can't see your Mac's plugins, so install the plugin when each workspace is created. Add the `extraKnownMarketplaces` and `enabledPlugins` entries above to your repo's `.claude/settings.json`, and add this to your Conductor setup script:
+
+```bash
+claude plugin marketplace add aaroncohn/openspec-conductor-powerups --scope project && claude plugin install powerups@openspec-conductor-powerups --scope project
+```
+
+Every new workspace then gets the latest version.
+
+If you'd rather have short names (`/babysitter`) and update by hand, copy the folders into `~/.claude/skills/` (or your repo's `.claude/skills/` for cloud workspaces) instead:
 
 ```bash
 git clone https://github.com/aaroncohn/openspec-conductor-powerups
 cp -R openspec-conductor-powerups/skills/* ~/.claude/skills/
 ```
 
-Or use [skills.sh](https://skills.sh): `npx skills add aaroncohn/openspec-conductor-powerups`.
-
-**For cloud workspaces**, the skills have to be in the repo, because a cloud sandbox can't see your Mac's `~/.claude/skills/`. Copy the folders into your project's `.claude/skills/` and commit them.
+**Upgrading from `openspec-conductor-powerups@openspec-conductor-powerups`:** the plugin is now called `powerups`. Claude Code moves your install over the next time the marketplace updates; if it says the plugin isn't cached, run `/plugin install powerups@openspec-conductor-powerups` once.
 
 ## Local vs cloud
 
@@ -51,11 +71,11 @@ Each skill works with the workspaces of its own kind: run from a local workspace
 
 | | Local (Conductor on your Mac) | Cloud (Conductor cloud workspaces) |
 | --- | --- | --- |
-| **Install** | Plugin, or copy the folders into `~/.claude/skills/` (see [Install](#install)). | Copy the folders into your repo's `.claude/skills/` and commit them: a cloud sandbox can't see your Mac's plugins or `~/.claude/skills/`. |
+| **Install** | The plugin, with auto-update on (see [Install](#install)). | The plugin, installed by your Conductor setup script from the repo's `.claude/settings.json` (see [Install](#install)): a cloud sandbox can't see your Mac's plugins. |
 | **Setup** | None. | The `conductor` CLI needs an API token. Turn on automatic API access in Conductor → Settings → General before creating the workspaces (it only applies to new ones), or set `CONDUCTOR_API_KEY`. |
 | **new-batch-explore** | Opens Conductor's Create dialog for each workspace; you press Enter once per workspace. Then it names each one `m{id}-{name}` in Conductor's database (backed up first). | Creates and names the workspaces itself, with no clicks, and gives you a link to each. |
 | **babysitter** | Messages appear in each workspace's chat, starting with "Via Babysitter:". They go through Conductor's database (backed up first; falls back to Claude Code's `SendMessage` if that stops working). Keep the Conductor app open and the Mac awake. Sessions can use your browser and its logins. | Messages appear in each workspace's chat through the `conductor` CLI. Sessions run in Linux sandboxes, so anything that needs your Mac (your browser and its logins, local files) comes to you as a handoff. |
-| **safe-to-archive** | Checks this workspace's branch. Other local branches live in the shared repository and survive archiving. | Archiving deletes the whole sandbox, so it checks every branch in it, plus any open Browserbase session. |
+| **safe-to-archive** | Checks this workspace's branch. Other local branches live in the shared repository and survive archiving. | Archiving deletes the whole sandbox, so it checks every branch in it, plus any running cloud browser session. |
 
 ## Requirements and assumptions
 
@@ -79,6 +99,8 @@ These skills are opinionated. They work best if your setup looks like this:
 It only runs when you type `/babysitter`; Claude won't start it by itself.
 
 To keep a hand on the release, add an option (a flag or plain words both work):
+
+Installed as a plugin, type `/powerups:babysitter` wherever this says `/babysitter`.
 
 | You type | It stops… |
 | --- | --- |
