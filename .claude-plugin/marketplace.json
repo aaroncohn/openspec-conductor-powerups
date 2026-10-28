@@ -9,7 +9,7 @@
     {
       "name": "openspec-conductor-powerups",
       "source": "./",
-      "description": "Start a batch of OpenSpec explorations in parallel Conductor workspaces, babysit them to production, and check each workspace is safe to archive."
+      "description": "Start a batch of OpenSpec explorations in parallel Conductor workspaces, babysit them to production, check each workspace is safe to archive, and compare real options before a decision that matters."
     }
   ]
 }

@@ -71,7 +71,7 @@ These skills are opinionated. They work best if your setup looks like this:
 `babysitter` is built to run without you. Know what it will do:
 
 - It answers other sessions' questions **on your behalf**, picking the recommended option. It lists each decision so you can reverse it.
-- It **merges PRs into `main`** and **promotes to production** following your repo's documented procedure (README, CLAUDE.md/AGENTS.md, or workflows). If no procedure is documented, it stops and asks.
+- It **merges PRs into `main`** and, once you say go, **promotes to production** following your repo's documented procedure (README, CLAUDE.md/AGENTS.md, or workflows). If no procedure is documented, it stops and asks.
 - It never logs in or out of any CLI and never writes secrets to files. Setup that needs your accounts (secrets, dashboards) is handed to you as step-by-step instructions as soon as it comes up.
 - **Locally, it writes to Conductor's own database.** Conductor has no supported way to post a message into another local workspace's chat, so `babysitter` puts its messages in the same queue the app uses when you type one. They show in each workspace's chat starting with "Via Babysitter:", and so do the replies. This is undocumented: it backs up the database before the first message, and if a Conductor update breaks it, it falls back to Claude Code's `SendMessage`, which works but doesn't show in the chat. The Conductor app must be open. In the cloud, it uses the supported `conductor` CLI instead.
 
@@ -81,12 +81,17 @@ To keep a hand on the release, add an option (a flag or plain words both work):
 
 | You type | It stops… |
 | --- | --- |
-| `/babysitter` | never: it goes all the way to production (default) |
-| `/babysitter --ask-before-prod` | once, right before production, to show you what's going out and wait for your go |
+| `/babysitter` | once, right before production, to show you what's going out and wait for your go (default) |
+| `/babysitter --auto-prod` | never: it goes all the way to production |
 | `/babysitter --stop-after dev` | after full CI on `main` and the dev deploy are green; you release to production |
 | `/babysitter --stop-after merged` | once every change is merged and archived; no CI run on `main`, no deploys |
 
-You can also name the workspaces or milestones to cover: `/babysitter 2.1 2.3 --ask-before-prod`.
+You can also name the workspaces or milestones to cover: `/babysitter 2.1 2.3 --auto-prod`.
+
+### What you'll see
+
+- **In Babysitter HQ:** a digest about every hour (or when you ask "what's the latest?"): a one- or two-sentence headline, what's waiting on you, what your product gained in plain words, and what's in progress. It only interrupts sooner when something needs you or something broke. Say "update me every 30 minutes" to change the pace.
+- **In a workspace that's waiting on you:** its last message starts with `⚠️ BLOCKED: DECISION NEEDED: …` or `⚠️ BLOCKED: ACTION NEEDED: …`, with options and a recommendation or the steps. If a session stops and the babysitter can't get it going again, it leaves `⚠️ STOPPED (via Babysitter): …` there, saying what it tried and what you can do.
 
 ## Contributing
 
