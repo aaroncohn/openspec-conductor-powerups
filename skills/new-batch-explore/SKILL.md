@@ -29,13 +29,14 @@ Never propose a milestone that another open workspace is already working on. Nam
 
 ```bash
 DB="${CONDUCTOR_DB_PATH:-$HOME/Library/Application Support/com.conductor.app/conductor.db}"
-ROOT="${CONDUCTOR_ROOT_PATH:-$(git rev-parse --show-toplevel)}"
+ROOT="${CONDUCTOR_ROOT_PATH:-$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")}"  # the main checkout, not this worktree
+SQL_ROOT=${ROOT//\'/\'\'}   # ' doubled, for use inside SQL quotes
 sqlite3 -separator ' | ' "file:$DB?mode=ro" "select w.workspace_name, w.branch, w.workspace_path,
     ifnull(s.status, ''), ifnull(w.last_activity_at, ''),
     replace(substr((select m.content from session_messages m where m.session_id = w.active_session_id
       and m.role = 'user' order by m.created_at limit 1), 1, 200), char(10), ' ')
   from workspaces w left join sessions s on s.id = w.active_session_id
-  where w.repository_id = (select id from repos where root_path = '$ROOT') and w.state != 'archived'
+  where w.repository_id = (select id from repos where root_path = '$SQL_ROOT') and w.state != 'archived'
   order by w.last_activity_at desc"
 ```
 
@@ -82,12 +83,12 @@ Fire them **one at a time** — the Create dialog has a single shared draft, so 
 ```bash
 ENC=$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read()))' <<< "$PROMPT")
 ENC_ROOT=$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$ROOT")
-BEFORE=$(sqlite3 "$DB" "select count(*) from workspaces where repository_id=(select id from repos where root_path='$ROOT')")
+BEFORE=$(sqlite3 "$DB" "select count(*) from workspaces where repository_id=(select id from repos where root_path='$SQL_ROOT')")
 open "conductor://new?path=$ENC_ROOT&prompt=$ENC"
 # then poll until a new row appears (give the user up to ~3 minutes)
 for i in $(seq 1 90); do
   sleep 2
-  NOW=$(sqlite3 "$DB" "select count(*) from workspaces where repository_id=(select id from repos where root_path='$ROOT')")
+  NOW=$(sqlite3 "$DB" "select count(*) from workspaces where repository_id=(select id from repos where root_path='$SQL_ROOT')")
   [ "$NOW" -gt "$BEFORE" ] && break
 done
 ```
@@ -96,7 +97,7 @@ Conductor's namer ignores names in the prompt and picks its own (e.g. "Milestone
 
 ```bash
 NAME="m{id}-{short-name}"
-WS=$(sqlite3 "$DB" "select local_id from workspaces where repository_id=(select id from repos where root_path='$ROOT') order by created_at desc limit 1")
+WS=$(sqlite3 "$DB" "select local_id from workspaces where repository_id=(select id from repos where root_path='$SQL_ROOT') order by created_at desc limit 1")
 sqlite3 "$DB" "update workspaces set workspace_name='$NAME', user_set_workspace_name=1 where local_id='$WS'"
 ```
 

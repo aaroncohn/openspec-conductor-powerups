@@ -98,9 +98,9 @@ These skills are opinionated. They work best if your setup looks like this:
 
 It only runs when you type `/babysitter`; Claude won't start it by itself.
 
-To keep a hand on the release, add an option (a flag or plain words both work):
-
 Installed as a plugin, type `/powerups:babysitter` wherever this says `/babysitter`.
+
+To keep a hand on the release, add an option (a flag or plain words both work):
 
 | You type | It stops… |
 | --- | --- |
