@@ -16,6 +16,8 @@ Fully autonomous: never wait on the user for anything a session can do or decide
 
 **Locally**, message sessions with `conductor-local.py` (next to this file), so each message and the session's reply show in that workspace's chat. Claude's own `SendMessage` reaches the session too, but Conductor doesn't record those turns, so the workspace chat stays blank. The script queues messages in Conductor's own outbox, which is undocumented: a Conductor update can break it, so fall back to `SendMessage` when it fails (step 3).
 
+**`main`** below means the repo's default branch: `$CONDUCTOR_DEFAULT_BRANCH` if it's set, otherwise the one `origin/HEAD` points to. `conductor-local.py scan` works it out the same way and prints it as `base`.
+
 ## Options
 
 By default the babysitter goes all the way to production, but asks once first: before promoting (step 7.4) it posts what's going out (PRs, database migrations) and waits for the user's go. The user can change that after `/babysitter`, as a flag or in plain words ("don't ask before prod", "stop after dev"):
@@ -55,7 +57,7 @@ git fetch origin -q
 python3 <this skill's dir>/conductor-local.py scan    # one JSON line per open workspace of this repo
 ```
 
-Each line has the workspace's name, path, branch, chat session id and status, its OpenSpec changes that aren't archived on `origin/main`, its PR (number and state), and its stage (see "Stage in the workspace name"). It only reads Conductor's database. If it fails, fall back to `git worktree list --porcelain` and `git ls-tree --name-only origin/main openspec/changes/archive/`, and work these out by hand.
+Each line has the workspace's name, path, branch, chat session id and status, its OpenSpec changes that aren't archived on `origin/main`, its PR (the open one, otherwise the newest: number and state), and its stage (see "Stage in the workspace name"). It only reads Conductor's database. If it fails, fall back to `git worktree list --porcelain` and `git ls-tree --name-only origin/main openspec/changes/archive/`, and work these out by hand.
 
 A worktree other than this one is **in scope** when `openspec/changes/` (skip `archive/`, include uncommitted files) has a change that isn't archived on `origin/main`. It's also in scope when it has work that isn't on `origin/main` (uncommitted changes, an open PR, or commits whose content isn't on `origin/main`), or when its session last stopped asking whether to commit, open a PR or merge: drive that work to merge too. Other worktrees are still exploring. Leave them alone and list them as skipped.
 
@@ -83,10 +85,10 @@ Start each workspace's name with its OpenSpec stage, so the sidebar shows where 
 
 | Stage | When |
 | --- | --- |
-| `explore` | no change in `openspec/changes/` that isn't archived on `origin/main` |
-| `propose` | it has a change, but `openspec status --change <name>` (run in its worktree) isn't planning-complete |
-| `apply` | planning is complete, until its PR is merged |
-| `archive` | its PR is merged; it keeps this prefix after the archive PR merges |
+| `explore` | no change that isn't on `origin/main` yet, and no other work that isn't on `origin/main` |
+| `propose` | it has a change that isn't on `origin/main` yet, but `openspec status --change <name>` (run in its worktree) isn't planning-complete |
+| `apply` | planning is complete, until its PR is merged; or it has work outside `openspec/` that isn't on `origin/main` (an open PR, or commits or edits), with or without a change |
+| `archive` | its PR is merged and nothing newer is in progress; it keeps this prefix after the archive PR merges |
 
 Locally, `conductor-local.py scan` works the stage out for you (step 1). Remove any earlier stage prefix before adding the new one, so prefixes never stack, and leave the rest of the name alone. Record the stage in the state file. Locally, rename the way a manual rename in the sidebar does (Conductor's database, backed up above):
 

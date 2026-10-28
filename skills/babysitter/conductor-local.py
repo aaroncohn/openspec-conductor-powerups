@@ -70,20 +70,24 @@ def watch(session_ids):
                 return
 
 
-def stage(changes, pr_state):
-    # changes: [(name, planning_complete)]; pr_state: "OPEN", "MERGED", "CLOSED" or None
-    if pr_state == "MERGED":
-        return "archive"
-    if not changes:
-        return "explore"
-    return "apply" if all(done for _, done in changes) else "propose"
+def stage(changes, code, merged):
+    # changes: [(name, planning_complete)] not yet on the base branch; code: work outside openspec/ that
+    # isn't on the base branch (an open PR or unmerged commits); merged: a PR of this branch is merged
+    if changes:
+        return "apply" if all(done for _, done in changes) else "propose"
+    if code:
+        return "apply"
+    return "archive" if merged else "explore"
 
 
 def check_stage():
-    assert stage([], None) == "explore"
-    assert stage([("a", False)], None) == "propose"
-    assert stage([("a", True)], "OPEN") == "apply"
-    assert stage([("a", True)], "MERGED") == "archive"
+    assert stage([], False, False) == "explore"
+    assert stage([("a", False)], False, False) == "propose"
+    assert stage([("a", True)], True, False) == "apply"
+    assert stage([], True, False) == "apply"            # open PR without an OpenSpec change
+    assert stage([], False, True) == "archive"          # merged, or its archive PR is open
+    assert stage([("b", True)], False, True) == "apply"  # an older PR merged, a new change since
+    assert stage([], True, True) == "apply"             # an older PR merged, new code since
 
 
 def out(args, cwd):
@@ -94,34 +98,61 @@ def out(args, cwd):
         return ""
 
 
+def base_branch():
+    ref = out(["git", "symbolic-ref", "--short", "refs/remotes/origin/HEAD"], ".").strip()
+    return os.environ.get("CONDUCTOR_DEFAULT_BRANCH") or ref.removeprefix("origin/") or "main"
+
+
+def code_work(path, base, merged_pr):
+    # Files outside openspec/ that this workspace changed (committed or not) and that differ from base.
+    since = merged_pr and merged_pr["headRefOid"]
+    if not (since and subprocess.run(["git", "merge-base", "--is-ancestor", since, "HEAD"], cwd=path,
+                                     capture_output=True).returncode == 0):
+        since = out(["git", "merge-base", base, "HEAD"], path).strip()
+    if not since:
+        return False
+    files = [f for f in out(["git", "diff", "--name-only", since], path).split("\n")
+             if f and not f.startswith("openspec/")]
+    return bool(files and out(["git", "diff", "--name-only", base, "--", *files], path).strip())
+
+
 def scan():
     if not os.path.exists(DB):
         sys.exit(f"no Conductor database at {DB}; use the manual commands in SKILL.md step 1")
     root = out(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], ".").strip()
     root = os.path.dirname(root)  # the main checkout, which Conductor stores as the repo's root_path
+    base = "origin/" + base_branch()
     db = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
     rows = db.execute(
         "select w.workspace_name, w.workspace_path, w.branch, w.active_session_id, ifnull(s.status, '')"
         " from workspaces w left join sessions s on s.id = w.active_session_id"
         " where w.repository_id = (select id from repos where root_path = ?) and w.state != 'archived'",
         (root,)).fetchall()
-    archived = {os.path.basename(p).split("-", 3)[-1] for p in
-                out(["git", "ls-tree", "--name-only", "origin/main", "openspec/changes/archive/"], ".").split()}
+    on_base = out(["git", "ls-tree", "--name-only", base + ":openspec/changes/"], ".").split()
+    archived = {p.split("-", 3)[-1] for p in
+                out(["git", "ls-tree", "--name-only", base + ":openspec/changes/archive/"], ".").split()}
     for name, path, branch, session_id, status in rows:
-        changes = []
+        changes, unarchived = [], []
         for d in sorted(glob.glob(os.path.join(path or "", "openspec/changes/*/"))):
             change = os.path.basename(d.rstrip("/"))
             if change == "archive" or change in archived:
                 continue
+            unarchived.append(change)
+            if change in on_base:  # merged, waiting for its archive PR
+                continue
             st = out(["openspec", "status", "--change", change, "--json"], path)
             done = json.loads(st).get("isPlanningComplete") if st else os.path.exists(os.path.join(d, "tasks.md"))
             changes.append((change, bool(done)))
-        prs = json.loads(out(["gh", "pr", "list", "--head", branch or "", "--state", "all", "--json",
-                              "number,state"], path) or "[]") if branch else []
+        prs = json.loads(out(["gh", "pr", "list", "--head", branch, "--state", "all", "--json",
+                              "number,state,headRefOid"], path) or "[]") if branch else []
+        prs.sort(key=lambda p: (p["state"] == "OPEN", p["number"]), reverse=True)
+        merged = [p for p in prs if p["state"] == "MERGED"]
+        code = bool(path and os.path.isdir(path)) and code_work(path, base, merged[0] if merged else None)
         pr = prs[0] if prs else None
         print(json.dumps({"name": name, "path": path, "branch": branch, "session": session_id,
-                          "status": status, "changes": [c for c, _ in changes], "pr": pr,
-                          "stage": stage(changes, pr and pr["state"])}))
+                          "status": status, "base": base, "changes": unarchived,
+                          "pr": pr and {"number": pr["number"], "state": pr["state"]},
+                          "stage": stage(changes, code, bool(merged))}))
 
 
 if __name__ == "__main__":

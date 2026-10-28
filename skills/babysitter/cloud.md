@@ -1,6 +1,6 @@
 # babysitter in a Conductor cloud workspace
 
-Read this when `CONDUCTOR_IS_LOCAL` is `0`. Every workspace runs in its own Linux sandbox, so there are no sibling worktrees, no `ListAgents`, and no `SendMessage`. Use the `conductor` CLI instead; it's on the `PATH` in cloud workspaces. These sections replace steps 1, 3 and 4 of `SKILL.md`. Everything else applies as written.
+Read this when `CONDUCTOR_IS_LOCAL` is `0`. Every workspace runs in its own Linux sandbox, so there are no sibling worktrees, no `ListAgents`, and no `SendMessage`. Use the `conductor` CLI instead; it's on the `PATH` in cloud workspaces. These sections replace steps 1, 3 and 4 of `SKILL.md`. Everything else applies as written, including what `main` means.
 
 If `conductor` fails with an auth error, tell the user that the workspace has no API token: they can turn on automatic API access in Conductor → Settings → General (it applies to new workspaces) or set their own `CONDUCTOR_API_KEY`. Stop until it works.
 
@@ -32,7 +32,7 @@ for m in json.load(sys.stdin)["data"]:
 
 ## Stage in the workspace name
 
-Rename with `conductor workspace rename <workspaceId> --name <new name>`, starting from the name `workspace list` shows. You can't run `openspec status` in another sandbox, so judge `propose` versus `apply` from its pushed branch (the change has a `tasks.md`) or its transcript (it finished `/opsx:propose`).
+Rename with `conductor workspace rename <workspaceId> --name <new name>`, starting from the name `workspace list` shows. You can't run `openspec status` in another sandbox, so judge `propose` versus `apply` from its pushed branch (the change has a `tasks.md`) or its transcript (it finished `/opsx:propose`). A workspace with an open PR but no OpenSpec change is `apply`. Judge by its newest PR: an older merged PR doesn't make it `archive` if it has newer work.
 
 ## 3. Messaging a session
 
@@ -83,7 +83,7 @@ If a session stops responding or its workspace is gone, do the step yourself fro
 Find them by name in `conductor workspace list --mine --repo "$REPO" --json`. To create one, write the queue prompt to a file, then:
 
 ```bash
-conductor workspace create --name "Open Decisions" --branch main --agent claude --message-file .context/open-decisions.md --json
+conductor workspace create --name "Open Decisions" --branch <default branch> --agent claude --message-file .context/open-decisions.md --json
 ```
 
 (`--name "Open Actions"` or `--name "Open Tests"` for the others.) Then send items with `conductor message create`, as in section 3. The queue session can't message you back: read its "Done:", "Answered:" and "Result:" lines from its transcript, and watch it with the watcher in section 4.
