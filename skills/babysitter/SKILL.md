@@ -128,17 +128,17 @@ Then answer whatever the session last stopped on (e.g. "Yes, run `/opsx:apply`",
 
 ## 4. Watch and keep them moving
 
-- Run `python3 <this skill's dir>/conductor-local.py watch <session id> ...` in the background (Bash `run_in_background`) for every session still in flight. It exits, naming the session, when one finishes a turn. Then read the end of its transcript, check its PR (`gh pr view <n> --json state,mergeStateStatus,statusCheckRollup`), act, and start the watcher again. For a session on the `SendMessage` fallback, `notify_when_idle` does this job; it's one-shot, so subscribe again with each reply.
+- Run `python3 <this skill's dir>/conductor-local.py watch <session id> ...` from this worktree, in the background (Bash `run_in_background`), for every session still in flight (with none, it still watches for new workspaces). It stays quiet until there's something to act on, then exits and prints what: a session finished a turn, a session has been working for 30 minutes without a new message, or its scan (step 1, every 10 minutes) found a workspace that's new, gone, or at a new stage. Give it a background timeout that ends when the next digest is due (step 6), at most 2 hours (Bash `timeout` in milliseconds), so you wake to post it. When a session finished a turn, read the end of its transcript, check its PR (`gh pr view <n> --json state,mergeStateStatus,statusCheckRollup`), act, and start the watcher again. For a session on the `SendMessage` fallback, `notify_when_idle` does this job; it's one-shot, so subscribe again with each reply.
 - **It asked something:** first decide whether it's blocking ("Blocking or batch" below). If not, answer as the user would: the recommended option, recorded as an assumption. Then add it to Open Decisions (step 9) so the user can review it later, and mention it in the next digest. If it is blocking, check that the session's last message starts with the `⚠️ BLOCKED:` line (rule 1). If it doesn't, tell it to post one now and wait. Then tell the user right away in this chat (step 6), and keep it under **Waiting on you** until it's answered.
-- **It stopped and you can't tell why** (no `⚠️ BLOCKED:` line, no question, work not done; e.g. a long test run finished but it never woke up to read it): prod it once to check where it is and continue, or, if it's waiting on the user, to post its `⚠️ BLOCKED:` line. If it still hasn't moved by the next re-scan, or it's erroring, send `⚠️ STOPPED (via Babysitter): <what it was doing>. <what you tried>. <what the user can do, e.g. open the workspace and press continue, or restart the session>` to that workspace, so that's the last thing the user sees there, and put it under **Waiting on you** (step 6).
+- **It stopped and you can't tell why** (no `⚠️ BLOCKED:` line, no question, work not done; e.g. a long test run finished but it never woke up to read it): prod it once to check where it is and continue, or, if it's waiting on the user, to post its `⚠️ BLOCKED:` line. If it still hasn't moved when the watcher next names it, or it's erroring, send `⚠️ STOPPED (via Babysitter): <what it was doing>. <what you tried>. <what the user can do, e.g. open the workspace and press continue, or restart the session>` to that workspace, so that's the last thing the user sees there, and put it under **Waiting on you** (step 6).
 - **Stay on the latest `main`:** after every merge into `main` (a change or an archive PR), update this workspace: `git fetch origin -q` and `git merge --ff-only origin/main` (or `git pull --ff-only`). You never commit here, so it should fast-forward; if it can't, check out `origin/main` detached instead. Read specs, the roadmap and code from this up-to-date copy.
 - **Overlap:** when one change lands, tell the remaining sessions what moved on `main` that touches their files.
 - **A session that won't take messages** (the notice says the subscription expired, or a delivery notice says messages are held for approval): tell the user right away, as for a `⚠️ STOPPED` workspace (step 6), and keep the others moving.
-- **Re-scan every 10 minutes.** Run the watcher with a 10-minute background timeout (Bash `timeout: 600000`), so you're woken even when no watched session finishes a turn. After every wake-up, redo step 1's scan for every workspace of the repo, then:
+- **New workspaces and stage changes:** when the watcher reports them:
   - rename any workspace whose stage changed ("Stage in the workspace name");
-  - adopt any workspace that has newly come into scope (for example, the user just ran `/opsx:propose` or `/opsx:apply` there). Brief its session (step 3), add it to the watcher, and mention it in the next digest: "Babysitter took over <workspace name> to keep it moving. You can tell me to stop babysitting it at any time."
+  - adopt any workspace that has newly come into scope (for example, the user just ran `/opsx:propose` or `/opsx:apply` there). Brief its session (step 3), add it to the watcher, and mention it in the next digest (step 6).
 
-  If nothing changed, or nothing worth posting right away (step 6), restart the watcher without posting.
+  If there's nothing worth posting right away (step 6), restart the watcher without posting.
 - **Stop babysitting:** when the user says to stop babysitting a workspace, stop messaging and watching it, mark it `stopped by user` in the state file, and don't adopt it again on a re-scan unless the user asks. Confirm in one line.
 - Don't poll in a loop yourself. Between events, end the turn quietly (step 6). For PR checks you're waiting on, `gh pr checks <n> --watch` is fine.
 
@@ -160,7 +160,7 @@ When a session reports something only the user can do that isn't a decision or a
 
 ## 6. Updates in this chat
 
-The user wants signal, not a build log. Post in this chat only at these moments, and stay quiet otherwise: end the turn without posting, or with a single line if the harness needs one.
+The user wants to know, regularly, that everything is moving: what just got done, what's being worked on, and where they're needed. Nothing else. Post in this chat only at these moments, and stay quiet otherwise: end the turn with no text at all.
 
 **Right away**, in two or three plain lines, when:
 - a new blocking decision or action comes up: what it is, why it holds things up, and the workspace to answer it in (where its `⚠️ BLOCKED:` message is waiting)
@@ -168,20 +168,20 @@ The user wants signal, not a build log. Post in this chat only at these moments,
 - something broke that the user would want to know about now: full CI on `main` fails, a deploy fails, production is rolled back
 - production is ready to go and needs the user's go (step 7.4)
 
-Everything else (a test passing, a PR opened, a merge, an archive, an adopted workspace, an answer from a queue) waits for the next digest.
+Everything else waits for the next digest: a PR opened, a merge, an archive, an adopted workspace, a rename, an answer from a queue, and anything you told a session to do. Never post a message of its own just to say that nothing needs the user, when the next digest is, what you checked, or what you asked a session to do ("I'm asking that session to renumber", "Restarted the watcher", "The other three are still testing").
 
-**Digests**, as if the user walked into the room and asked "what's the latest on all this?". Post one when the user asks, and otherwise about every hour (or at whatever interval the user asked for) if something changed since the last one. Note the time of each in the state file. If nothing changed, skip it. Shape:
+**Digests**, as if the user walked into the room and asked "what's the latest on all this?". Post one when the user asks, and otherwise about every hour (or at whatever interval the user asked for) if something changed since the last one. Note the time of each in the state file. If nothing changed, skip it. In this order:
 
-- **The headline:** one or two sentences, e.g. "**3 of 5 merged.** Contact forms and the new sign-in are live on dev; the custom domains work is in review and should merge within the hour."
-- **Waiting on you:** one line per open blocking item or `⚠️ STOPPED` workspace, with the workspace to go to. Leave it out when there are none.
-- **What your product gained:** a bullet for each feature that merged or went live since the last digest, written as what users can now do and why it's better, in plain, warm words, e.g. "Visitors can message you from your site. Suspicious messages get a quick human check instead of landing in your inbox (#191)." This is the part the user reads to feel the progress, so make it concrete and give each one its due.
-- **In progress:** one line per active workspace: the feature in words, where it is, what's next, and a rough time.
-- **Open actions: K · Open decisions: N · Open tests: M**, the counts in those three workspaces (step 9), plus one line on any answer that came back and what you did with it.
-- End with "**Next:** <the one thing the user should do>" or "Nothing needed from you. Next digest around <time>, if anything changes." (e.g. "around 7:45 pm EDT, if anything changes")
+1. **What happened**, in a short paragraph or two of plain words: what finished or moved since the last digest, said as what the product's users get and why it's better, e.g. "The profile-photo workspace opened PR #259. Photos keep their shape, there's a "replace photo" option, and the edit-photo popup is clearer." Fold in, briefly, anything you sorted out along the way ("It had taken a roadmap number another change already uses, so I asked it to move to the next free one"), workspaces you renamed, and each workspace you took over: "Babysitter is taking over <workspace name> now to keep it moving forward. You can tell me to stop babysitting it at any time."
+2. **Waiting on you:** one line per open blocking item or `⚠️ STOPPED` workspace, with the workspace to go to. Leave it out when there are none.
+3. **Working on now:** a bullet per workspace you're babysitting that isn't done: the feature in words (with its PR or roadmap number), what it's doing, and what's next, e.g. "**Instant email sign-in (#252):** one unrelated test failed, so it's being re-run on its own."
+4. **Open actions: K · Open decisions: N · Open tests: M**, the counts in those three workspaces (step 9), plus one line on any answer that came back and what you did with it.
+5. **The workspace table:** one row per open workspace of this repo except this one and the three queues, from a fresh scan: workspace name, stage, progress, and a narrow "babysitter monitoring?" column with `x` for the ones you're babysitting.
+6. The last line says when the next digest is due: "Next digest around <time>, if anything changes." (e.g. "around 7:45 pm EDT, if anything changes")
 
 **Plain words everywhere:** name each feature in words, not just its roadmap ID ("2.2b, the spam check"). Leave out test counts, file names, task numbers, CI job names and internal labels unless something failed or the user has to act on them; then say what it means for the user. Don't invent codes like "C1"; describe the item.
 
-**The workspace table** (one row per open workspace of this repo except this one and the three queues, from a fresh scan: workspace name, stage, progress, and a narrow "babysitter monitoring?" column with `x` for the ones you're babysitting) goes in a digest only when the user asks for it, plus in the first message and the final report.
+The first message and the final report have the table too.
 
 Decisions you made for the user, tests only they can do, and actions only they can do don't go here: they go to Open Decisions, Open Tests and Open Actions (step 9).
 

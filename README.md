@@ -113,7 +113,7 @@ You can also name the workspaces or milestones to cover: `/babysitter 2.1 2.3 --
 
 ### What you'll see
 
-- **In Babysitter HQ:** a digest about every hour (or when you ask "what's the latest?"): a one- or two-sentence headline, what's waiting on you, what your product gained in plain words, and what's in progress. It only interrupts sooner when something needs you or something broke. Say "update me every 30 minutes" to change the pace. Times are in your timezone ("7:45 pm EDT"); in a cloud workspace it asks once, unless your `AGENTS.md`/`CLAUDE.md` names one.
+- **In Babysitter HQ:** a digest about every hour, if anything changed (or when you ask "what's the latest?"): what just got done, in plain words about what your product gained; what's waiting on you; what each workspace is working on now; the open actions, decisions and tests; a table of every workspace with its stage and progress; and when the next digest is due. Between digests it stays silent, unless something needs you or something broke. Say "update me every 30 minutes" to change the pace. Times are in your timezone ("7:45 pm EDT"); in a cloud workspace it asks once, unless your `AGENTS.md`/`CLAUDE.md` names one.
 - **In a workspace that's waiting on you:** its last message starts with `⚠️ BLOCKED: DECISION NEEDED: …` or `⚠️ BLOCKED: ACTION NEEDED: …`, with options and a recommendation or the steps. If a session stops and the babysitter can't get it going again, it leaves `⚠️ STOPPED (via Babysitter): …` there, saying what it tried and what you can do.
 - **On a team:** if your `AGENTS.md`/`CLAUDE.md` names more than one owner, each blocked item and each queue item says who should answer it. Otherwise everything goes to whoever ran `/babysitter`.
 
