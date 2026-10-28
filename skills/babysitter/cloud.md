@@ -45,7 +45,7 @@ conductor message create --session <sessionId> --message-file .context/msg-<n>.m
 The `Via Babysitter: ` prefix and rules from step 3 still apply. These messages show in the workspace's chat. Two cloud additions for the rules:
 
 - Sessions can't message you back. Tell them to put anything you need (PR URL, questions, setup only the user can do) in their final reply, where you'll read it.
-- Anything that needs the user's own machine (their browser and its logins, local files) can't be done from the cloud. Treat it as user setup (step 5) and write the handoff block for a **local** workspace.
+- Anything that needs the user's own machine (their browser and its logins, local files) can't be done from the cloud. Treat it as a user action (step 5), and write any browser prompt for the user's **local** browser.
 
 ## 4. Watching them
 
@@ -78,7 +78,7 @@ Start it just before you send a message (so the turn it triggers counts), and ch
 
 If a session stops responding or its workspace is gone, do the step yourself from this sandbox (`git fetch origin <branch>` and work on that branch) and say so in the update.
 
-## 9. Creating Open Decisions and Open Tests
+## 9. Creating Open Actions, Open Decisions and Open Tests
 
 Find them by name in `conductor workspace list --mine --repo "$REPO" --json`. To create one, write the queue prompt to a file, then:
 
@@ -86,4 +86,4 @@ Find them by name in `conductor workspace list --mine --repo "$REPO" --json`. To
 conductor workspace create --name "Open Decisions" --branch main --agent claude --message-file .context/open-decisions.md --json
 ```
 
-(`--name "Open Tests"` for the other.) Then send items with `conductor message create`, as in section 3. The queue session can't message you back: read its "Answered:" and "Result:" lines from its transcript, and watch it with the watcher in section 4.
+(`--name "Open Actions"` or `--name "Open Tests"` for the others.) Then send items with `conductor message create`, as in section 3. The queue session can't message you back: read its "Done:", "Answered:" and "Result:" lines from its transcript, and watch it with the watcher in section 4.
