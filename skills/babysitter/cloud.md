@@ -49,32 +49,50 @@ The `Via Babysitter: ` prefix and rules from step 3 still apply. These messages 
 
 ## 4. Watching them
 
-There are no idle notifications in the cloud. Run a watcher in the background (Bash `run_in_background`) so you're woken when a session finishes a turn, and re-start it after each event. It notes each session's `updatedAt` when it starts and fires when a session is idle with a newer one, so a short turn that starts and ends between checks still counts, and a session already sitting idle doesn't fire.
+There are no idle notifications in the cloud. Run a watcher in the background (Bash `run_in_background`) and re-start it after each event. It stays quiet until there's something to act on, then exits and prints what: a session finished a turn, a session has been working for 30 minutes with no update, or a new workspace of this repo appeared (it checks every 10 minutes). It notes each session's `updatedAt` when it starts, so a short turn that starts and ends between checks still counts, and a session already sitting idle doesn't fire.
 
 ```bash
 cat > .context/watch.py <<'EOF'
-# Prints "<sessionId> <status>" and exits when a watched session finishes a turn.
+# Usage: watch.py <repo> [<sessionId> ...]. Prints why and exits when there's something to act on.
 import json, subprocess, sys, time
-def status(s):
-    r = subprocess.run(["conductor", "--json", "session", "status", s], capture_output=True, text=True)
+repo, sessions = sys.argv[1], sys.argv[2:]
+def cli(*args):
+    r = subprocess.run(["conductor", "--json", *args], capture_output=True, text=True)
     try:
-        d = json.loads(r.stdout)
-        return d.get("status") or "", d.get("updatedAt") or ""
+        return json.loads(r.stdout)
     except ValueError:
-        return "", ""
-start = {s: status(s)[1] for s in sys.argv[1:]}
+        return {}
+def status(s):
+    d = cli("session", "status", s)
+    return d.get("status") or "", d.get("updatedAt") or ""
+def workspaces():
+    return {w["id"]: w["name"] for w in cli("workspace", "list", "--mine", "--repo", repo, "--limit", "100").get("data", [])}
+start = {s: status(s)[1] for s in sessions}
+seen = {s: (start[s], time.time()) for s in sessions}
+known, last_scan = workspaces(), time.time()
 while True:
     time.sleep(30)
-    for s in sys.argv[1:]:
+    for s in sessions:
         st, updated = status(s)
         if st and st not in ("working", "queued") and updated != start[s]:
-            print(s, st)
-            sys.exit(0)
+            sys.exit(print(s, "finished a turn"))
+        if st != "working" or updated != seen[s][0]:
+            seen[s] = (updated, time.time())
+        elif time.time() - seen[s][1] > 30 * 60:
+            sys.exit(print(s, "has been working for 30 minutes with no update"))
+    if time.time() - last_scan > 10 * 60:
+        now, last_scan = workspaces(), time.time()
+        new = [now[w] for w in now if known and w not in known]
+        if new:
+            sys.exit(print("new workspace:", ", ".join(new)))
+        known = now or known
 EOF
-python3 .context/watch.py <sessionId> <sessionId> ...      # run in the background
+python3 .context/watch.py "$REPO" <sessionId> <sessionId> ...      # run in the background
 ```
 
-Start it just before you send a message (so the turn it triggers counts), and check sessions that were already idle when you started by reading their transcripts. When it fires, read that session's new messages, check its PR, act, and re-start the watcher for the sessions still in flight. Use the same 10-minute background timeout and re-scan as in step 4 of `SKILL.md`, with section 1 above as the scan.
+Start it just before you send a message (so the turn it triggers counts), and check sessions that were already idle when you started by reading their transcripts. When it fires, read that session's new messages, check its PR, act, and re-start the watcher for the sessions still in flight.
+
+The watcher can't see a stage change in a workspace you aren't watching (for example, the user just ran `/opsx:propose` there), so give it a background timeout of 30 minutes, or less if the next digest (step 6) is due sooner. When it times out, redo section 1's scan, then rename and adopt as in step 4 of `SKILL.md`. Stay silent if nothing changed.
 
 If a session stops responding or its workspace is gone, do the step yourself from this sandbox (`git fetch origin <branch>` and work on that branch) and say so in the next digest.
 

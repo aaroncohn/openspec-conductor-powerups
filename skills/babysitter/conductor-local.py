@@ -8,7 +8,7 @@ be open. Back up first:  sqlite3 "$CONDUCTOR_DB_PATH" ".backup '<file>'"
 
   conductor-local.py session <worktree path>          print the workspace's chat session id
   conductor-local.py send <session id> <message file> queue the message, wait until it's delivered
-  conductor-local.py watch <session id> ...           block until one of them finishes a turn
+  conductor-local.py watch [<session id> ...]         block until there's something to act on (see watch())
   conductor-local.py scan                              one JSON line per open workspace of this repo (read-only)
 """
 import datetime, glob, json, os, sqlite3, subprocess, sys, time, uuid
@@ -56,18 +56,56 @@ def send(session_id, message_file):
 
 
 def watch(session_ids):
-    # Conductor records a "result" event at the end of every turn; fire when a session gets a new one.
+    # Exits, printing why, when one of these sessions finishes a turn or has been working for 30 minutes
+    # without a new message, or when the scan (every 10 minutes) finds a workspace that's new, gone, or at
+    # a new stage. Everything else stays quiet, so the coordinator only wakes when it has to act.
     db = connect()
+    # Conductor records a "result" event at the end of every turn.
     turns = lambda s: db.execute(
         "select count(*) from session_messages where session_id = ? and role = 'assistant'"
         " and content like '{\"type\":\"result\"%'", (s,)).fetchone()[0]
+    count = lambda s: db.execute("select count(*) from session_messages where session_id = ?", (s,)).fetchone()[0]
+    working = lambda s: (db.execute("select status from sessions where id = ?", (s,)).fetchone() or [""])[0] == "working"
     start = {s: turns(s) for s in session_ids}
+    seen = {s: (count(s), time.time()) for s in session_ids}
+    stages, last_scan = snapshot(), time.time()
     while True:
         time.sleep(5)
         for s in session_ids:
             if turns(s) > start[s]:
-                print(s, "finished a turn")
-                return
+                return print(s, "finished a turn")
+            n = count(s)
+            if n != seen[s][0] or not working(s):
+                seen[s] = (n, time.time())
+            elif time.time() - seen[s][1] > 30 * 60:
+                return print(s, "has been working for 30 minutes without a new message")
+        if time.time() - last_scan > 10 * 60:
+            now, last_scan = snapshot(), time.time()
+            changes = scan_changes(stages, now)
+            if changes:
+                return print("\n".join(changes))
+
+
+def snapshot():
+    out(["git", "fetch", "origin", "-q"], ".")
+    return {w["path"]: (w["name"] or os.path.basename(w["path"]), w["stage"]) for w in scan_rows()}
+
+
+def scan_changes(before, after):
+    changes = [f"new workspace: {after[p][0]} ({after[p][1]})" for p in after if p not in before]
+    changes += [f"workspace gone: {before[p][0]}" for p in before if p not in after]
+    changes += [f"stage changed: {after[p][0]} {before[p][1]} -> {after[p][1]}"
+                for p in after if p in before and before[p][1] != after[p][1]]
+    return changes
+
+
+def check_scan_changes():
+    a = {"/w/1": ("m1-a", "apply"), "/w/2": ("m2-b", "explore")}
+    assert scan_changes(a, a) == []
+    assert scan_changes(a, {**a, "/w/2": ("propose-m2-b", "explore")}) == []  # a rename alone isn't news
+    assert scan_changes(a, {**a, "/w/2": ("m2-b", "propose")}) == ["stage changed: m2-b explore -> propose"]
+    assert scan_changes(a, {"/w/1": a["/w/1"]}) == ["workspace gone: m2-b"]
+    assert scan_changes({}, {"/w/3": ("m3", "explore")}) == ["new workspace: m3 (explore)"]
 
 
 def stage(changes, code, merged):
@@ -116,7 +154,7 @@ def code_work(path, base, merged_pr):
     return bool(files and out(["git", "diff", "--name-only", base, "--", *files], path).strip())
 
 
-def scan():
+def scan_rows():
     if not os.path.exists(DB):
         sys.exit(f"no Conductor database at {DB}; use the manual commands in SKILL.md step 1")
     root = out(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], ".").strip()
@@ -131,6 +169,7 @@ def scan():
     on_base = out(["git", "ls-tree", "--name-only", base + ":openspec/changes/"], ".").split()
     archived = {p.split("-", 3)[-1] for p in
                 out(["git", "ls-tree", "--name-only", base + ":openspec/changes/archive/"], ".").split()}
+    rows_out = []
     for name, path, branch, session_id, status in rows:
         changes, unarchived = [], []
         for d in sorted(glob.glob(os.path.join(path or "", "openspec/changes/*/"))):
@@ -149,10 +188,16 @@ def scan():
         merged = [p for p in prs if p["state"] == "MERGED"]
         code = bool(path and os.path.isdir(path)) and code_work(path, base, merged[0] if merged else None)
         pr = prs[0] if prs else None
-        print(json.dumps({"name": name, "path": path, "branch": branch, "session": session_id,
-                          "status": status, "base": base, "changes": unarchived,
-                          "pr": pr and {"number": pr["number"], "state": pr["state"]},
-                          "stage": stage(changes, code, bool(merged))}))
+        rows_out.append({"name": name, "path": path, "branch": branch, "session": session_id,
+                         "status": status, "base": base, "changes": unarchived,
+                         "pr": pr and {"number": pr["number"], "state": pr["state"]},
+                         "stage": stage(changes, code, bool(merged))})
+    return rows_out
+
+
+def scan():
+    for w in scan_rows():
+        print(json.dumps(w))
 
 
 if __name__ == "__main__":
@@ -161,7 +206,8 @@ if __name__ == "__main__":
         session(*args)
     elif cmd == "send" and len(args) == 2:
         send(*args)
-    elif cmd == "watch" and args:
+    elif cmd == "watch":
+        check_scan_changes()
         watch(args)
     elif cmd == "scan" and not args:
         check_stage()
