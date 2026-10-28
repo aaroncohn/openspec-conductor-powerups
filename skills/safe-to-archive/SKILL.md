@@ -35,7 +35,7 @@ git log --oneline origin/<target>..HEAD      # commits on this branch not in tar
 
 If there is no PR, also check whether the branch's content already landed (e.g. merged by another route): `git diff --stat origin/<target> HEAD -- $(git diff --name-only $(git merge-base origin/<target> HEAD) HEAD)`. Empty means the content is already in the target.
 
-**Cloud only:** check every local branch, not just this one: `git for-each-ref refs/heads --format='%(refname:short) %(upstream:short)'`. For each, look for unpushed commits (`git rev-list --count <upstream>..<branch>`, or no upstream at all) and whether its work landed in the target (`gh pr list --head <branch> --state all`, or an empty `git diff origin/<target> <branch>`). Also, if `BROWSERBASE_API_KEY` is set, list running Browserbase sessions (`GET https://api.browserbase.com/v1/sessions?status=RUNNING` with header `X-BB-API-Key`): an open session should be ended first so its saved logins are written back.
+**Cloud only:** check every local branch, not just this one: `git for-each-ref refs/heads --format='%(refname:short) %(upstream:short)'`. For each, look for unpushed commits (`git rev-list --count <upstream>..<branch>`, or no upstream at all) and whether its work landed in the target (`gh pr list --head <branch> --state all`, or an empty `git diff origin/<target> <branch>`). Also look for any cloud browser session still running for this workspace (for example, with Browserbase and `BROWSERBASE_API_KEY` set: `GET https://api.browserbase.com/v1/sessions?status=RUNNING` with header `X-BB-API-Key`). End it first so its saved logins are written back.
 
 From the ignored files, skip regenerable ones (`node_modules`, build output, caches, `.playwright-mcp/`) and pick out anything that looks worth keeping: notes, scripts, plans, `.env` files with values that live nowhere else.
 
@@ -57,7 +57,7 @@ If the repo has an `openspec/` directory, also run `openspec list` (or `ls opens
 
 **Heads-ups** (safe, but say so):
 - `.context/` or other ignored files that exist only here: list them; they'll be deleted. Call out any that look worth keeping (notes, plans, `.env` values that live nowhere else) and offer to copy them.
-- Processes running from this directory (dev servers, watchers): they'll lose their directory. Give the PIDs. In the cloud, also any running Browserbase session (end it first so its logins are saved).
+- Processes running from this directory (dev servers, watchers): they'll lose their directory. Give the PIDs. In the cloud, also any running cloud browser session (end it first so its logins are saved).
 - PR is `CLOSED` without merging: the work was abandoned on purpose? Ask.
 - Squash-merge leftovers: Conductor may still show a diff after a squash merge. That's fine if the content is in the target.
 - Repo with a `dev` → `main` flow: if the merged work isn't in `origin/main` yet, note it isn't in production. Not a blocker — promotion can be done from any workspace. If the branch added database migrations, remind the user to apply them to production before promoting.

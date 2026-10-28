@@ -9,6 +9,7 @@ Conductor lets you run many coding agents side by side, each in its own workspac
 | **new-batch-explore** | Reads your roadmap, picks the next 2–5 milestones that can be built in parallel without colliding, and opens a Conductor workspace for each one, already in `/opsx:explore`. |
 | **babysitter** | After you've explored and proposed in several workspaces, run this in one more workspace. It messages each workspace's Claude session, answers their questions for you, and keeps them moving until every change is tested, merged, archived, and released to production. If `safe-to-archive` is installed, each workspace runs it last. Then it walks you through the decisions it made, one at a time with a recommendation, and the things only you can test, one at a time with full steps and a shortcut (a prompt for your browser agent, or an offer to do most of it). |
 | **safe-to-archive** | Checks whether a workspace can be archived without losing anything: uncommitted or unpushed work, open PRs, stashes, unarchived OpenSpec changes, files that only exist in this workspace, running processes. Read-only. |
+| **browser-handoff** | For cloud workspaces: when an agent needs something done in your real browser (a dashboard setting, a secret pasted into a web UI), it writes one self-contained task block, with the exact account and your project's rules, for you to paste into a local `claude --chrome` session. |
 | **better-decision** | Before a choice that matters, stops and lays out at least four real options, each with pros, cons, how hard it is to undo, and a rating, then recommends one and waits for your pick. In an OpenSpec change, it records the pick in `design.md`. Use it anytime, in any workspace. |
 
 ## The loop
@@ -92,6 +93,7 @@ You can also name the workspaces or milestones to cover: `/babysitter 2.1 2.3 --
 
 - **In Babysitter HQ:** a digest about every hour (or when you ask "what's the latest?"): a one- or two-sentence headline, what's waiting on you, what your product gained in plain words, and what's in progress. It only interrupts sooner when something needs you or something broke. Say "update me every 30 minutes" to change the pace.
 - **In a workspace that's waiting on you:** its last message starts with `⚠️ BLOCKED: DECISION NEEDED: …` or `⚠️ BLOCKED: ACTION NEEDED: …`, with options and a recommendation or the steps. If a session stops and the babysitter can't get it going again, it leaves `⚠️ STOPPED (via Babysitter): …` there, saying what it tried and what you can do.
+- **On a team:** if your `AGENTS.md`/`CLAUDE.md` names more than one owner, each blocked item and each queue item says who should answer it. Otherwise everything goes to whoever ran `/babysitter`.
 
 ## Contributing
 
