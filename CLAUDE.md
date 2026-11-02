@@ -16,6 +16,7 @@ Never add a `version` to plugin.json. Never rename the plugin (`powerups`) or th
 
 ## Testing a change
 
+0. `tests/check.sh`: compiles the scripts and runs their self-tests, checks the prompt invariants that drifted once (explore asks one decision at a time, local and cloud prompts match, the digest pastes `state.py table` and `counts`), every skill is in the README, the skills are generic, and the plugin validates. Add a line to it when you fix a drift.
 1. `claude plugin validate .` passes. Three warnings are expected: no version, no icon, and this CLAUDE.md not being loaded as plugin context (it's for working on this repo, not for users).
 2. Test-install into a throwaway config:
    ```bash
@@ -40,6 +41,7 @@ No details from any one project: accounts, domains, people, product names. The s
 
 - Plain words, short sentences, concrete examples. Write for the reader.
 - Skills are prompts: shorter beats longer. Cut what the model would do anyway.
+- `skills/<name>/examples/*.md` are golden examples of what a skill's output should look like: few-shot for the model, and the reference when reviewing a change. Made-up product, no real project. Update them when the shape changes.
 - Deterministic steps (queries, parsing, loops) belong in a script, not prose.
 - Skill frontmatter: `description` says what it does and when to use it. Use `disable-model-invocation: true` for skills that should only run when the user types them (babysitter, better-decision).
 - A new skill also goes in the README table and, if it changes what the plugin does, in the descriptions in plugin.json and marketplace.json.

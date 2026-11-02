@@ -223,7 +223,7 @@ Everything else waits for the next digest: a PR opened, a merge, an archive, an 
 
 **Plain words everywhere:** name each feature in words, not just its roadmap ID ("2.2b, the spam check"). Leave out test counts, file names, task numbers, CI job names and internal labels unless something failed or the user has to act on them; then say what it means for the user. The only codes are the queue IDs (OA001, OD001, OT001, step 9), and each comes with a few words on what it is.
 
-The first message and the final report have the table too. Prose and the table do different jobs: the prose says what it means for the user, the table lets them scan every workspace at once. Each digest needs both.
+`examples/digest.md` (next to this file) shows a full digest and a quiet one; match its shape. The first message and the final report (`examples/final-report.md`) have the table too. Prose and the table do different jobs: the prose says what it means for the user, the table lets them scan every workspace at once. Each digest needs both.
 
 Decisions you made for the user, tests only they can do, and actions only they can do don't go here: they go to Open Decisions, Open Tests and Open Actions (step 9).
 
@@ -276,7 +276,7 @@ You're the Open <Actions|Decisions|Tests> queue for /babysitter, which runs in t
 - When the last open item is answered, post a short, warm message that makes the user feel good: what they got through, what it unblocked, and that the queue is empty. If more items arrive later, start again.
 ```
 
-**Each item you send** ("Via Babysitter: add <action|decision|test> <ID> (<release-blocking|normal|minor>): …") carries everything the queue needs.
+**Each item you send** ("Via Babysitter: add <action|decision|test> <ID> (<release-blocking|normal|minor>): …") carries everything the queue needs. `examples/queue-item.md` shows how a queue presents one.
 
 For an **action**:
 - the milestone and feature in plain words, the workspace it came from, and whether it holds up a merge or the release

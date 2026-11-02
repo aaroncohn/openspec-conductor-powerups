@@ -65,7 +65,7 @@ Don't use a question or multiple-choice tool (such as AskUserQuestion) for this:
 
 Workspace name: `m{id}-{short-name}`, so the milestone number shows in Conductor's sidebar. The ID is the roadmap's, lowercased and prefixed with `m` (`10` gives `m10`, `6b` gives `m6b`; an ID that already starts with a letter, like `M9`, stays `m9`). The short name is one or two kebab-case words for the milestone, e.g. `m10-alerts`, `m9-dashboards`. Don't add `explore`: the workspace soon moves past exploring.
 
-Prompt for each milestone:
+Prompt for each milestone (`examples/first-message.md`, next to this file, shows what its first reply should look like: findings, scope, one decision, stop):
 
 ```
 /opsx:explore Milestone {id}: {Milestone title}
