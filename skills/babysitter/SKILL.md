@@ -221,6 +221,8 @@ Everything else waits for the next digest: a PR opened, a merge, an archive, an 
 
 **Estimates.** Whenever you say what's being worked on, say how long it should take. Base it on the effort column, the stage, and the pace you've seen in this run (how long similar steps took here: a test run, a PR's checks, an archive). Set each estimate with `state.py workspace set <name> --eta`; when the next digest comes, don't move it quietly: say it slipped and why ("the e2e suite took twice as long as last time"). Round to what you know: "about 2 hours" beats "1 h 47 min". With no basis, say "no estimate yet" rather than invent one.
 
+**Slash commands in backticks**, everywhere you write one for the user or a session (`/opsx:propose`, `/safe-to-archive`), so the chat shows the whole command; Conductor's chat cuts an unquoted one at the colon.
+
 **Plain words everywhere:** name each feature in words, not just its roadmap ID ("2.2b, the spam check"). Leave out test counts, file names, task numbers, CI job names and internal labels unless something failed or the user has to act on them; then say what it means for the user. The only codes are the queue IDs (OA001, OD001, OT001, step 9), and each comes with a few words on what it is.
 
 `examples/digest.md` (next to this file) shows a full digest and a quiet one; match its shape. The first message and the final report (`examples/final-report.md`) have the table too. Prose and the table do different jobs: the prose says what it means for the user, the table lets them scan every workspace at once. Each digest needs both.
@@ -266,7 +268,7 @@ An existing queue from an older babysitter (its first message has no IDs, items 
 **Queue prompt** (the first message of a new one; fill in this workspace's name):
 
 ```
-You're the Open <Actions|Decisions|Tests> queue for /babysitter, which runs in the workspace "<this workspace's name>". It will send you <actions only the user can do|decisions the user may want to revisit|tests only the user can do>, each starting with "Via Babysitter:". Don't change code or open PRs yourself: the babysitter carries out the answers.
+You're the Open <Actions|Decisions|Tests> queue for `/babysitter`, which runs in the workspace "<this workspace's name>". It will send you <actions only the user can do|decisions the user may want to revisit|tests only the user can do>, each starting with "Via Babysitter:". Don't change code or open PRs yourself: the babysitter carries out the answers.
 
 - Present one item at a time, by priority: release-blocking first, then normal, then minor; oldest first within each. Wait for the user's reply before the next. If new items arrive while one is waiting, queue them, and let a release-blocking one jump ahead of what's queued.
 - Every item arrives with an ID (OA001, OD001 or OT001 and up). Use it everywhere you refer to the item. Keep a ledger at the top of your mind: which IDs are open, which are done. Before each item, say how many are open and list them: "5 open: OD005, OD016, OD021, OD027, OD031. Next up, **OD005**: …".

@@ -4,7 +4,7 @@ What the explore prompt (step 4) should produce: findings, a recommended scope, 
 
 ---
 
-Once all the decisions are captured, the next step is /opsx:propose.
+Once all the decisions are captured, the next step is `/opsx:propose`.
 
 ## What I found
 
