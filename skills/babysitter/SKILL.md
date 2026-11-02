@@ -1,6 +1,6 @@
 ---
 name: babysitter
-description: Coordinate every other Conductor workspace of this repo whose OpenSpec change has been proposed, messaging their Claude sessions directly and keeping them moving until each change is built, tested, merged into main with green CI and archived, then promote main to production. Answers their questions on the user's behalf, and sends decisions to revisit, tests only the user can do, and actions only the user can do (secrets, accounts, payment details) to separate Open Decisions, Open Tests and Open Actions workspaces, which present them one at a time. Works in local and cloud Conductor workspaces. Run with /babysitter, optionally followed by the workspaces or milestones to cover, and --auto-prod or --stop-after merged|dev.
+description: Coordinate every other Conductor workspace of this repo whose OpenSpec change has been proposed, messaging their Claude sessions directly and keeping them moving until each change is built, tested, merged into main with green CI and archived, then promote main to production. Answers their questions on the user's behalf, and sends decisions to revisit, tests only the user can do, and actions only the user can do (secrets, accounts, payment details) to separate Open Decisions, Open Tests and Open Actions workspaces, which present them one at a time. Works in local and cloud Conductor workspaces. Run with /babysitter, optionally followed by the workspaces or milestones to cover, --mode cautious|standard|fast|hyperspeed, --auto-prod or --stop-after merged|dev.
 disable-model-invocation: true
 ---
 
@@ -25,9 +25,25 @@ By default the babysitter goes all the way to production, but asks once first: b
 - `--auto-prod`: promote to production without asking.
 - `--stop-after merged`: stop once every change is merged and archived. Skip step 7: no full CI run on `main`, no dev check, no production release. Archive-blocking tasks that need a deployed environment stay open and go in the report.
 - `--stop-after dev`: do step 7 up to and including dev (full CI on `main`, dev verified, archives merged), then stop before production.
-- How often to post digests (step 6), in plain words, e.g. "update me every 30 minutes". The default is about every hour.
+- How often to post digests (step 6), in plain words, e.g. "update me every 15 minutes". The default is every 30 minutes; the first run in a repo asks whether the user would rather have every 15 minutes or every hour (see "Mode").
+- How often to release (step 7), in plain words, e.g. "release whenever something's ready" or "once a day". The default is at most twice a day.
 
-Record the chosen option in the state file and apply it to the goal, the "Done means" list, and the final report.
+**Repo defaults.** A `## babysitter` section in the project's `AGENTS.md`/`CLAUDE.md` can set these for every run (e.g. `mode: fast`, `stop after: dev`, `release: once a day`, `digests: every 15 minutes`, `Timezone: America/New_York`). The user's flags and words for this run win over it.
+
+### Mode
+
+The mode says how much the babysitter does on its own. Four, from careful to all-in:
+
+| Mode | What's blocking (waits for the user) | Merges | Production | "Go" for sessions (step 4) | Releases | Stuck session |
+| --- | --- | --- | --- | --- | --- | --- |
+| **cautious** | everything in "Blocking or batch", plus every merge to `main` and every decision that's hard to reverse | asks first | asks first | no: the user gives it | at most once a day | prod it, then tell the user |
+| **standard** (default) | as written in "Blocking or batch" | on its own | asks once | yes | at most twice a day | prod it, then `⚠️ STOPPED` |
+| **fast** | money, security or privacy, data loss, migrations | on its own | without asking (`--auto-prod`) | yes | whenever something's ready | prod it, then `⚠️ STOPPED` |
+| **hyperspeed** | money, security or privacy, irreversible data loss; everything else is decided and logged to Open Decisions | on its own | without asking | yes | whenever something's ready; `/safe-to-archive` and the archive PRs run alongside the release, not before it | take over right away (Rules), no prod first |
+
+A flaky CI job on `main` is re-run once without asking in every mode (step 7.1). Pick the mode this way, in order: `--mode <name>` or plain words after `/babysitter` ("go fast", "be careful") for this run; else `mode:` in the repo's `## babysitter` section; else ask, once, the first time babysitter runs in this repo, in its own short message that explains the four modes in two lines each (what it decides alone, what it asks you about), recommends **standard**, and asks which to use. In the same message, ask how often they want digests: every 30 minutes is the default; would they rather every 15 minutes or every hour? When they answer, suggest adding `mode: <name>` and `digests: <interval>` to the `## babysitter` section so the next run doesn't ask. Until they answer, run as **standard** with digests every 30 minutes. Explicit flags (`--auto-prod`, `--stop-after`, a release cadence) win over what the mode implies.
+
+Record the mode and the other options in the state file and apply them to the goal, the "Done means" list, and the final report. Name the mode in the first message and the final report.
 
 ## Done means
 
@@ -75,9 +91,11 @@ Then put each workspace's stage in its name (see "Stage in the workspace name"),
 
 Also learn the repo's conventions before the first message: CI workflows and labels (which checks are quick and which are full, how the full suite is triggered), AGENTS.md / CLAUDE.md / README rules for PRs and commit authors, how past archive PRs looked (`gh pr list --state merged -L 10`), and how dev and production deploy and get verified.
 
+If the repo has values two sessions could both claim (ordered migration timestamps, sequence or build numbers, a shared counter), hand each session its value in the brief and keep the list in the state file. Two sessions picking the same migration timestamp costs each a rebase, a fix and a re-test.
+
 ## 2. Keep a state file
 
-`.context/babysitter.md` has one row per change: workspace, session name, branch, change, PR, archive PR, stage (`building → testing → PR open → merged → post-merge checks → archived`), what the session is waiting on, and notes. Also keep every item sent to Open Decisions, Open Tests and Open Actions (step 9) with its status: open, answered, passed, failed, done, or skipped. Update it after every event. After a context compaction, re-read it before acting.
+`.context/babysitter.md` has one row per change: workspace, session name, branch, change, PR, archive PR, stage (`building → testing → PR open → merged → post-merge checks → archived`), what the session is waiting on, and notes. Also keep every item sent to Open Decisions, Open Tests and Open Actions (step 9) with its ID (step 9, "IDs"), a few words on what it is, and its status: open, answered, passed, failed, done, or skipped. Update it after every event. After a context compaction, re-read it before acting.
 
 **Times are in the user's timezone.** Every time you write, in this chat, in messages to sessions and queues, in the state file and in logs, is in the user's timezone, 12-hour with the zone's current abbreviation: "7:45 pm EDT", never UTC. Work out the zone once, before you first write a time (also when you switch to this skill partway through a run), and keep its name in the state file (e.g. `America/New_York`):
 
@@ -118,9 +136,9 @@ Then answer whatever the session last stopped on (e.g. "Yes, run `/opsx:apply`",
 1. **Keep going without asking.** Finish every task, run the review and tests, then push and open the PR. If you'd normally stop to ask, decide whether it's blocking (see "Blocking or batch" below). Most aren't: pick the recommended option, record it as an assumption in the change artifacts, list it in the PR body under "owner review", and continue. If it truly is blocking, ask the user here, in this workspace, in a message whose first line is `⚠️ BLOCKED: DECISION NEEDED: <the decision in a few words>` or `⚠️ BLOCKED: ACTION NEEDED: <the action in a few words>`, so the user can tell from the sidebar why you stopped. Below that line, say why it can't wait, and for a decision give lettered options with your recommendation (the `better-decision` format, if that skill is installed); for an action, give the steps. Then wait for their answer. Any other time you stop before your work is done, say why in the first line.
 2. **Test as much as possible.** Run the checks CI runs. Add tests for new behaviour. Run the expensive suites locally (db, e2e, etc.) and list in the PR body which ran and which couldn't. For UI changes, drive the flows in a browser. List what only the user can test, with steps.
 3. **PR:** follow the repo's conventions (title, body sections, commit author, CI labels). Request only quick checks if the repo separates them and you ran the heavy suites locally.
-4. **Merge:** once quick checks are green, rebase on the latest `origin/main` (other milestones may have landed), re-run the checks affected by the rebase, then `gh pr merge --squash`. Resolve conflicts keeping both sides, and tell me what you touched. Add specific warnings about files you know another workspace also changes (e.g. "the build number moved on main: use main's value + 1").
+4. **Merge:** once quick checks are green, rebase on the latest `origin/main` once, right before merging (other milestones may have landed). Re-run only the checks the rebase can affect: the quick checks, plus the suites covering files that changed on both sides. Don't run the full local suites again just because `main` moved. Then `gh pr merge --squash`. Resolve conflicts keeping both sides, and tell me what you touched. Add specific warnings about files you know another workspace also changes (e.g. "the build number moved on main: use main's value + 1").
 5. **Don't** run the full CI suite on main or touch production: the coordinator does that once everything is in.
-6. **Archive:** after the merge, run `/opsx:archive` (sync the specs) and open its result as a separate openspec-only archive PR ( plus whatever past archive PRs did, e.g. roadmap or notes updates) and merge it once its checks pass. If CI skips openspec-only PRs, run `openspec validate --all --strict` and merge it yourself. **Exception:** if some tasks can only be checked against a deployed environment, leave them open, and archive after the coordinator says the deploy is live.
+6. **Archive:** after the merge, run `/opsx:archive` (sync the specs) and open its result as a separate openspec-only archive PR ( plus whatever past archive PRs did, e.g. roadmap or notes updates) and merge it once its checks pass. If CI skips openspec-only PRs, run `openspec validate --all --strict` and merge it yourself. **Exception:** a check that only an automated step can do against a deployed environment (a cron, a webhook, a real DNS record) keeps the archive open until the coordinator says the deploy is live. A check that needs the user's own eyes or devices never blocks an archive: archive now, note it in the change and the roadmap row as "owner checks still open", and tell me so it goes to Open Tests. If it fails later, it's a follow-up PR.
 7. **Setup only the user can do** (secrets, dashboard settings, third-party accounts): don't block on it unless it's truly blocking (see below). Make sure nothing hard-fails without it, put the steps in the PR body under "owner setup", and tell me right away.
 8. Reply with the PR URL(s) when merged.
 9. **Log:** after each step (tasks done, tests run, PR opened, merged, archived) and each decision you made without asking, add a line, dated in the user's timezone (<the zone, e.g. `America/New_York`>), to `.context/babysitter-log.md` in your workspace, with PR links.
@@ -130,6 +148,8 @@ Then answer whatever the session last stopped on (e.g. "Yes, run `/opsx:apply`",
 
 - Run `python3 <this skill's dir>/conductor-local.py watch <session id> ...` from this worktree, in the background (Bash `run_in_background`), for every session still in flight (with none, it still watches for new workspaces). It stays quiet until there's something to act on, then exits and prints what: a session finished a turn, a session has been working for 30 minutes without a new message, or its scan (step 1, every 10 minutes) found a workspace that's new, gone, or at a new stage. Give it a background timeout that ends when the next digest is due (step 6), at most 2 hours (Bash `timeout` in milliseconds), so you wake to post it. When a session finished a turn, read the end of its transcript, check its PR (`gh pr view <n> --json state,mergeStateStatus,statusCheckRollup`), act, and start the watcher again. For a session on the `SendMessage` fallback, `notify_when_idle` does this job; it's one-shot, so subscribe again with each reply.
 - **It asked something:** first decide whether it's blocking ("Blocking or batch" below). If not, answer as the user would: the recommended option, recorded as an assumption. Then add it to Open Decisions (step 9) so the user can review it later, and mention it in the next digest. If it is blocking, check that the session's last message starts with the `⚠️ BLOCKED:` line (rule 1). If it doesn't, tell it to post one now and wait. Then tell the user right away in this chat (step 6), and keep it under **Waiting on you** until it's answered.
+- **It's waiting for a "go":** when a session stops for a go-ahead ("say go when ready", "shall I continue?", "ready to push when you are"), you have the user's authority to give it: reply `Via Babysitter: go ahead` and say what it was waiting for, so it doesn't ask again. The one go that stays the user's is production (step 7.4), unless `--auto-prod` or the mode says otherwise. If it said it will ask for a go once something finishes (a CI run, a deploy, another PR landing, an action from Open Actions coming back "done"), watch that thing yourself, and the moment it's ready tell the session so: "Via Babysitter: <what> is ready, continue". Don't let a session sit on a condition that's already true.
+- **Its PR is ready and it's gone quiet** (checks green and mergeable, or an openspec-only PR the repo runs no checks on, and no reply for 10 minutes): merge it yourself (`gh pr merge --squash`), tell the session what you did so it carries on with the next step, and log it in that worktree's `.context/babysitter-log.md`. Prodding a session to run one command costs more than the command.
 - **It stopped and you can't tell why** (no `⚠️ BLOCKED:` line, no question, work not done; e.g. a long test run finished but it never woke up to read it): prod it once to check where it is and continue, or, if it's waiting on the user, to post its `⚠️ BLOCKED:` line. If it still hasn't moved when the watcher next names it, or it's erroring, send `⚠️ STOPPED (via Babysitter): <what it was doing>. <what you tried>. <what the user can do, e.g. open the workspace and press continue, or restart the session>` to that workspace, so that's the last thing the user sees there, and put it under **Waiting on you** (step 6).
 - **Stay on the latest `main`:** after every merge into `main` (a change or an archive PR), update this workspace: `git fetch origin -q` and `git merge --ff-only origin/main` (or `git pull --ff-only`). You never commit here, so it should fast-forward; if it can't, check out `origin/main` detached instead. Read specs, the roadmap and code from this up-to-date copy.
 - **Overlap:** when one change lands, tell the remaining sessions what moved on `main` that touches their files.
@@ -154,6 +174,8 @@ The goal is speed without lowering quality. So most decisions and actions don't 
 
 When unsure, prefer batch if the choice can be reversed in a small later PR; otherwise blocking. A blocking item stays in the workspace where it came up: its session asks the user there, under a `⚠️ BLOCKED:` first line (step 3, rule 1), and waits, while the other workspaces keep going. Record each blocking item in the state file with its workspace.
 
+**Big things first.** Act like a product manager: the few items that move the release or change what users get come first, in your attention, in the digests and in the queues. Small, easily fixed or reversible things (a label, a default, a cosmetic test, a tidy-up) never hold up a merge, an archive or a release, and never wait their turn ahead of something that matters. Grade every item you send to a queue: **release-blocking** (the release waits on it), **normal**, or **minor** (easy to fix or reverse later). The queues present them in that order. If you catch yourself spending a digest on a minor item, or a session circling one, settle it with the recommended option, log it as minor, and move on.
+
 ## 5. User actions: send them to Open Actions as soon as they're known
 
 When a session reports something only the user can do that isn't a decision or a test (an environment variable or secret to set, an account to create, a payment method to add, a dashboard setting, a DNS record), don't save it for the end. If it's blocking ("Blocking or batch"), it stays in that workspace under its `⚠️ BLOCKED:` line and you tell the user right away (step 6). Otherwise send it to Open Actions (step 9) right away. Plan the production release so it waits for actions production needs, or confirm that nothing breaks without them.
@@ -171,32 +193,42 @@ The user wants to know, regularly, that everything is moving: what just got done
 
 Everything else waits for the next digest: a PR opened, a merge, an archive, an adopted workspace, a rename, an answer from a queue, and anything you told a session to do. Never post a message of its own just to say that nothing needs the user, when the next digest is, what you checked, or what you asked a session to do ("I'm asking that session to renumber", "Restarted the watcher", "The other three are still testing").
 
-**Don't say what didn't happen**, in a digest or anywhere else in this chat: no "Nothing needs you right now", "No answers since the last digest" or "Nothing new on the others". Leave that part out; a missing part means there's nothing to report.
+**Don't say what didn't happen**, in a digest or anywhere else in this chat: no "Nothing needs you right now", "No answers since the last digest" or "Nothing new on the others". Leave that part out; a missing part means there's nothing to report. The one exception is a quiet digest's opening line (below).
 
-**Digests**, as if the user walked into the room and asked "what's the latest on all this?". Post one when the user asks, and otherwise about every hour (or at whatever interval the user asked for) if something changed since the last one. Note the time of each in the state file. If nothing changed, skip it. In this order:
+**Digests**, as if the user walked into the room and asked "what's the latest on all this?". Post one every 30 minutes (or at whatever interval the user asked for), on the clock, and whenever the user asks ("what's the latest?", "status?", `/status-check`). Note the time of each in the state file. A digest is always the full shape below, table included; never a bare paragraph or a list of bullets on its own. When nothing moved since the last one, the first part is one line ("Quiet half hour: everything's still running, nothing finished") and the rest is as usual, so the user always has a current table. In this order:
 
-1. **What happened**, in a short paragraph or two of plain words: what finished or moved since the last digest, said as what the product's users get and why it's better, e.g. "The profile-photo workspace opened PR #259. Photos keep their shape, there's a "replace photo" option, and the edit-photo popup is clearer." Fold in, briefly, anything you sorted out along the way ("It had taken a roadmap number another change already uses, so I asked it to move to the next free one"), workspaces you renamed, and each workspace you took over: "Babysitter is taking over <workspace name> now to keep it moving forward. You can tell me to stop babysitting it at any time."
+1. **What happened**, in a short paragraph or two of plain words, biggest thing first: what finished or moved since the last digest, said as what the product's users get and why it's better, e.g. "The profile-photo workspace opened PR #259. Photos keep their shape, there's a "replace photo" option, and the edit-photo popup is clearer." Fold in, briefly, anything you sorted out along the way ("It had taken a roadmap number another change already uses, so I asked it to move to the next free one"), workspaces you renamed, and each workspace you took over: "Babysitter is taking over <workspace name> now to keep it moving forward. You can tell me to stop babysitting it at any time."
 2. **Waiting on you:** one line per open blocking item or `⚠️ STOPPED` workspace, with the workspace to go to. Leave it out when there are none.
-3. **Working on now:** a bullet per workspace you're babysitting that isn't done: the feature in words (with its PR or roadmap number), what it's doing, and what's next, e.g. "**Instant email sign-in (#252):** one unrelated test failed, so it's being re-run on its own."
-4. **Open actions: K · Open decisions: N · Open tests: M**, the counts in those three workspaces (step 9), plus one line on any answer that came back and what you did with it.
-5. **The workspace table:** one row per open workspace of this repo except this one and the three queues, from a fresh scan: workspace name, stage, progress, and a narrow "babysitter monitoring?" column with `x` for the ones you're babysitting.
-6. The last line says when the next digest is due: "Next digest around <time>, if anything changes." (e.g. "around 7:45 pm EDT, if anything changes")
+3. **Working on now:** a bullet per workspace you're babysitting that isn't done, the one that matters most to the release first: the feature in words (with its PR or roadmap number), what it's doing, what's next, and when you expect it merged, e.g. "**Instant email sign-in (#252):** one unrelated test failed, so it's being re-run on its own. Merged in about an hour, around 4 pm EST." Then one line for the whole run: when everything should be merged, and when it should release given the release cadence ("Everything merged around 6 pm EST; release in tomorrow morning's window").
+4. **Critical path:** the chain of things that has to happen, in order, before the next release can go out, each with who or what it's waiting on, and the link that's holding it up marked, e.g. "spam check: e2e suite (running, ~40 min) → rebase and merge → archive PR → full CI on main → dev → **your go** → production. Holding it up: the e2e suite." Work it out from the workspaces still open, the release cadence and the open blocking items; it's the longest chain, not every chain. One short list, or one line when only one workspace is left.
+5. **Open actions: K · Open decisions: N · Open tests: M**, the counts in those three workspaces (step 9), each followed by the open IDs ("Open decisions: 5 (OD005, OD016, OD021, OD027, OD031)"), plus one line on any answer that came back and what you did with it.
+6. **The workspace table:** one row per open workspace of this repo except this one and the three queues, from a fresh scan, with these columns:
+   - **workspace**: its name
+   - **stage**: explore, propose, apply or archive
+   - **effort**: S, M, L or XL, how big its whole task is next to the project's other changes. Use the roadmap's own size if it has one; otherwise estimate it once from the change's tasks and keep it in the state file, so it doesn't drift between digests.
+   - **progress**: what's done so far
+   - **next step**: what has to happen to finish, in a few words ("rebase and merge", "archive PR", "waiting on your decision in that workspace")
+   - **ETA**: when it should be merged, as a duration and a time ("~2 h, around 4 pm EST"), or "on you" when it's waiting on the user
+   - **babysitter monitoring?**: narrow, `x` for the ones you're babysitting
+7. The last line says when the next digest is due: "Next digest around <time>, if anything changes." (e.g. "around 7:45 pm EDT, if anything changes")
 
-**Plain words everywhere:** name each feature in words, not just its roadmap ID ("2.2b, the spam check"). Leave out test counts, file names, task numbers, CI job names and internal labels unless something failed or the user has to act on them; then say what it means for the user. Don't invent codes like "C1"; describe the item.
+**Estimates.** Whenever you say what's being worked on, say how long it should take. Base it on the effort column, the stage, and the pace you've seen in this run (how long similar steps took here: a test run, a PR's checks, an archive). Keep each estimate in the state file; when the next digest comes, don't move it quietly: say it slipped and why ("the e2e suite took twice as long as last time"). Round to what you know: "about 2 hours" beats "1 h 47 min". With no basis, say "no estimate yet" rather than invent one.
 
-The first message and the final report have the table too.
+**Plain words everywhere:** name each feature in words, not just its roadmap ID ("2.2b, the spam check"). Leave out test counts, file names, task numbers, CI job names and internal labels unless something failed or the user has to act on them; then say what it means for the user. The only codes are the queue IDs (OA001, OD001, OT001, step 9), and each comes with a few words on what it is.
+
+The first message and the final report have the table too. Prose and the table do different jobs: the prose says what it means for the user, the table lets them scan every workspace at once. Each digest needs both.
 
 Decisions you made for the user, tests only they can do, and actions only they can do don't go here: they go to Open Decisions, Open Tests and Open Actions (step 9).
 
 ## 7. After the last merge: CI on main, dev, production
 
-1. Run the repo's full CI suite on `main` once, the way the repo does it (e.g. `gh workflow run <ci>.yml --ref main`), and watch it to green. If it fails, have the owning session fix it forward with a normal PR.
+1. Run the repo's full CI suite on `main` once, the way the repo does it (e.g. `gh workflow run <ci>.yml --ref main`), and watch it to green. If a job fails before any test ran, or the failing test passed on its PR, re-run that job once yourself right away; don't hold the release on a session for it. If it fails again, or a test fails for the first time, have the owning session fix it forward with a normal PR. Flakes found during a run go in one fix PR at the end, not one per milestone.
 2. Confirm dev deployed and serves that commit (health endpoint, deploy workflow, or the URL the docs give).
 3. Tell sessions with deploy-dependent tasks that dev is live at `<commit>`. They run those checks, then archive (rule 6). Wait for every archive PR to merge and every `/safe-to-archive` verdict (rule 10).
 4. Promote to production using the project's documented procedure (README/docs "promote"/"production", CLAUDE.md, memory, workflows on a production branch or tag). Note first what's going out, including DB migrations. Post that list and wait for the user's go, unless `--auto-prod` was given: then do it without asking. If no procedure is documented, stop and ask.
 5. Watch the production deploy to green and verify production serves the new commit. If it's broken, roll back as documented, tell the user, and fix forward.
 
-Release once, after everything is in, not after each merge. With `--stop-after merged`, skip this whole step; with `--stop-after dev`, stop after item 3.
+Release once, after everything is in, not after each merge, and at most as often as the release cadence (Options; default twice a day). Adopting a workspace mid-run doesn't restart the clock: work merged after a release waits for the next window, unless the user asks for it now. With `--stop-after merged`, skip this whole step; with `--stop-after dev`, stop after item 3.
 
 ## 8. Final report
 
@@ -204,7 +236,7 @@ Your last message must contain everything:
 
 - **Shipped:** a table with one row per change: PR, archive PR, merged ✅, archived ✅. Then: full CI on main ✅ (run link), dev ✅, and production ✅ (commit, deploy link, URL verified, migrations applied). If an option stopped earlier, say where it stopped and what's left to release.
 - **Skipped:** workspaces not in scope, and any session that couldn't be reached.
-- **Open actions: K · Open decisions: N · Open tests: M**, with a link or pointer to each of those workspaces, and the answers that came back and what you did with them. Don't list the items themselves here.
+- **Open actions: K · Open decisions: N · Open tests: M**, each with its open IDs and a link or pointer to that workspace, and the answers that came back and what you did with them. Don't repeat the items themselves here.
 - **Follow-ups:** anything noticed along the way that isn't a decision or a test (e.g. an unexpected env var). Numbered, one line each.
 - **Clean-up:** each workspace's `/safe-to-archive` verdict (✅ safe, or ⛔ with what's left), so the user knows which to archive in Conductor. If `safe-to-archive` isn't installed, say so and list the workspaces whose PRs and archive PRs are merged.
 
@@ -218,6 +250,8 @@ Actions only the user can do, decisions the user may want to revisit, and tests 
 - **Open Tests** gets every test only the user can do. Send each one once its feature is live where the user can test it (dev or production), not before.
 - **Open Actions** gets every action only the user can do that isn't a decision or a test (step 5): secrets and environment variables, accounts, payment methods, dashboard settings, DNS, as long as it's batch, not blocking. Send each one as soon as it's known. Ones the release waits on go first.
 
+**IDs.** Every item gets an ID when you send it, unique within the repo for as long as the queues live: `OA001`, `OA002`… for actions, `OD001`… for decisions, `OT001`… for tests (three digits, then four if a repo ever gets there). The ID is how the user, the queue and the digests refer to it, with a few words on what it is ("OD016, the spam-check threshold"); never a running position like "7 of 3". Keep the next number for each queue in the state file. At the start of a run, before the first item, read the highest ID each existing queue workspace has seen (its transcript, or ask its session "what's the highest ID you've been sent?") and continue from there, so a new Babysitter HQ never reuses a number. With no queue workspace, start at 001.
+
 **Find or create the workspace.** Before sending an item, look for an open workspace of this repo named `Open Actions`, `Open Decisions` or `Open Tests`. If there is one, send the item to its session. If there isn't (e.g. the last one was finished and archived), create a new one with the queue prompt below as its first message, then send items to it. Locally, create it the way `new-batch-explore` does (a `conductor://new` link the user confirms with Enter, then the name set in Conductor's database) and tell the user to press Enter. In the cloud, see `cloud.md`. Never stage-rename these three workspaces.
 
 **Queue prompt** (the first message of a new one; fill in this workspace's name):
@@ -225,14 +259,15 @@ Actions only the user can do, decisions the user may want to revisit, and tests 
 ```
 You're the Open <Actions|Decisions|Tests> queue for /babysitter, which runs in the workspace "<this workspace's name>". It will send you <actions only the user can do|decisions the user may want to revisit|tests only the user can do>, each starting with "Via Babysitter:". Don't change code or open PRs yourself: the babysitter carries out the answers.
 
-- Present one item at a time, oldest first. Wait for the user's reply before the next. If new items arrive while one is waiting, queue them.
-- The items come from different milestones, so each one stands on its own: start with "<Action|Decision|Test> <n> of <open count>", then the milestone and feature in plain words, the workspace it came from, and what was built and why this is open.
+- Present one item at a time, by priority: release-blocking first, then normal, then minor; oldest first within each. Wait for the user's reply before the next. If new items arrive while one is waiting, queue them, and let a release-blocking one jump ahead of what's queued.
+- Every item arrives with an ID (OA001, OD001 or OT001 and up). Use it everywhere you refer to the item. Keep a ledger at the top of your mind: which IDs are open, which are done. Before each item, say how many are open and list them: "5 open: OD005, OD016, OD021, OD027, OD031. Next up, **OD005**: …".
+- The items come from different milestones, so each one stands on its own: after the ID, the milestone and feature in plain words, the workspace it came from, and what was built and why this is open.
 - Always offer skip.
-- After each reply, write one line starting "Done:" (actions), "Answered:" (decisions) or "Result:" (tests) with the item number, the reply, and anything the user added, then present the next item.
+- After each reply, write one line starting "Done:" (actions), "Answered:" (decisions) or "Result:" (tests) with the item's ID, the reply, and anything the user added, then present the next item. If asked for a status, or when `/status-check` runs here, list the open IDs with one line each.
 - When the last open item is answered, post a short, warm message that makes the user feel good: what they got through, what it unblocked, and that the queue is empty. If more items arrive later, start again.
 ```
 
-**Each item you send** ("Via Babysitter: add <action|decision|test>: …") carries everything the queue needs.
+**Each item you send** ("Via Babysitter: add <action|decision|test> <ID> (<release-blocking|normal|minor>): …") carries everything the queue needs.
 
 For an **action**:
 - the milestone and feature in plain words, the workspace it came from, and whether it holds up a merge or the release

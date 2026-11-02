@@ -55,6 +55,8 @@ Candidates: not ✅/done, and all of their steps not done. Drop any that are:
 
 Prefer roadmap order; include a partially-done 🟡 milestone only if its remaining steps are unblocked. Two is fine when the roadmap is thin; never pad to five.
 
+If the roadmap sizes milestones, bundle two or three small (S) ones that don't overlap into one workspace as a single batch change, named `m{id}-{id}-batch` (e.g. `m4.1-4.2-batch`), with each milestone's step table in the prompt. A small milestone alone still pays for a whole explore, propose, PR, archive and release cycle.
+
 Show the picks in a chat message, as a short table (ID, name, why now, what it avoids), followed by anything deliberately skipped with its one-line reason. Offer lettered alternatives if there's a genuine judgment call, naming each milestone by ID and name (e.g. "2.5 custom code/CSS"), never by ID alone. End the message by asking the user to reply with a letter, and **wait for that reply before creating anything.**
 
 Don't use a question or multiple-choice tool (such as AskUserQuestion) for this: its popup hides the table and the skipped list, so the user sees bare IDs with no context.
@@ -73,7 +75,7 @@ From the roadmap ({roadmap path} on origin/{base}):
 
 Explore how to build this milestone. Check the main specs and existing code first, surface open questions and tradeoffs, and recommend a scope for a change proposal. Don't implement anything yet.
 
-Then ask the open decisions one at a time, starting with the one the others depend on. Just before the first one, say: "Once all the decisions are captured, the next step is /opsx:propose." End this message on that first decision.
+Then list every open decision in one message, in dependency order, numbered, each with lettered options, a one-line trade-off per option, and one marked (recommended) with the reason, so the user can answer them all in one reply (e.g. "1a, 2c, 3 recommended"). Say first: "Once these are answered, the next step is /opsx:propose." Ask a follow-up only when an answer opens a new decision.
 
 After the last decision is answered, summarize every decision in one table and end with: "Next step: run /opsx:propose to draft this into a proposal." Don't create the change or write its artifacts from explore mode, and don't ask whether to; /opsx:propose does that.
 ```

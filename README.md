@@ -7,7 +7,8 @@ Conductor lets you run many coding agents side by side, each in its own workspac
 | Skill | What it does |
 | --- | --- |
 | **new-batch-explore** | Reads your roadmap, picks the next 2–5 milestones that can be built in parallel without colliding, and opens a Conductor workspace for each one, already in `/opsx:explore`. |
-| **babysitter** | After you've explored and proposed in several workspaces, run this in one more workspace. It messages each workspace's Claude session, answers their questions for you, and keeps them moving until every change is tested, merged, archived, and released to production. If `safe-to-archive` is installed, each workspace runs it last. Then it walks you through the decisions it made, one at a time with a recommendation, and the things only you can test, one at a time with full steps and a shortcut (a prompt for your browser agent, or an offer to do most of it). |
+| **babysitter** | After you've explored and proposed in several workspaces, run this in one more workspace. It messages each workspace's Claude session, answers their questions for you, and keeps them moving until every change is tested, merged, archived, and released to production. If `safe-to-archive` is installed, each workspace runs it last. Then it walks you through the decisions it made, one at a time with a recommendation, and the things only you can test, one at a time with full steps and a shortcut (a prompt for your browser agent, or an offer to do most of it). Every item has an ID (`OA001`, `OD001`, `OT001`…) that stays the same everywhere. |
+| **status-check** | Where things stand, from wherever you run it. In Babysitter HQ, a full digest with the table. In an Open Actions, Decisions or Tests workspace, how many items are open, by ID with a line each. In any other workspace, its stage, PR and checks, and what's left before merge. |
 | **safe-to-archive** | Checks whether a workspace can be archived without losing anything: uncommitted or unpushed work, open PRs, stashes, unarchived OpenSpec changes, files that only exist in this workspace, running processes. Read-only. |
 | **browser-handoff** | For cloud workspaces: when an agent needs something done in your real browser (a dashboard setting, a secret pasted into a web UI), it writes one self-contained task block, with the exact account and your project's rules, for you to paste into a local `claude --chrome` session. |
 | **better-decision** | Before a choice that matters, stops and lays out at least four real options, each with pros, cons, how hard it is to undo, and a rating, then recommends one and waits for your pick. In an OpenSpec change, it records the pick in `design.md`. Use it anytime, in any workspace. |
@@ -18,6 +19,7 @@ Conductor lets you run many coding agents side by side, each in its own workspac
 /new-batch-explore          → N new workspaces, each exploring one milestone
 /opsx:explore, /opsx:propose  in each workspace (that's you, thinking with Claude)
 /babysitter                 → apply, test, merge, archive, release (hands off)
+/status-check               in any workspace → where things stand
 /safe-to-archive            in each workspace (babysitter runs it for you) → archive it in Conductor
 ```
 
@@ -75,6 +77,7 @@ Each skill works with the workspaces of its own kind: run from a local workspace
 | **Setup** | None. | The `conductor` CLI needs an API token. Turn on automatic API access in Conductor → Settings → General before creating the workspaces (it only applies to new ones), or set `CONDUCTOR_API_KEY`. |
 | **new-batch-explore** | Opens Conductor's Create dialog for each workspace; you press Enter once per workspace. Then it names each one `m{id}-{name}` in Conductor's database (backed up first). | Creates and names the workspaces itself, with no clicks, and gives you a link to each. |
 | **babysitter** | Messages appear in each workspace's chat, starting with "Via Babysitter:". They go through Conductor's database (backed up first; falls back to Claude Code's `SendMessage` if that stops working). Keep the Conductor app open and the Mac awake. Sessions can use your browser and its logins. | Messages appear in each workspace's chat through the `conductor` CLI. Sessions run in Linux sandboxes, so anything that needs your Mac (your browser and its logins, local files) comes to you as a handoff. |
+| **status-check** | Same everywhere: it reads this chat, the state file, `gh` and `openspec`. | Same. |
 | **safe-to-archive** | Checks this workspace's branch. Other local branches live in the shared repository and survive archiving. | Archiving deletes the whole sandbox, so it checks every branch in it, plus any running cloud browser session. |
 
 ## Requirements and assumptions
@@ -92,6 +95,8 @@ These skills are opinionated. They work best if your setup looks like this:
 `babysitter` is built to run without you. Know what it will do:
 
 - It answers other sessions' questions **on your behalf**, picking the recommended option. It lists each decision so you can reverse it.
+- It keeps the big things first. Small, easily reversed items never hold up a merge or a release; they're graded `minor` and come last in the queues, after anything release-blocking.
+- When a session stops to ask for a "go" ("shall I push?", "say go when ready"), it gives the go for you. If a session is waiting for something to finish first (CI, a deploy, a setting you had to change), it watches that and tells the session the moment it's ready. The one go it never gives for you is production, unless you asked for that.
 - It **merges PRs into `main`** and, once you say go, **promotes to production** following your repo's documented procedure (README, CLAUDE.md/AGENTS.md, or workflows). If no procedure is documented, it stops and asks.
 - It never logs in or out of any CLI and never writes secrets to files. Setup that needs your accounts (secrets, dashboards) is handed to you as step-by-step instructions as soon as it comes up.
 - **Locally, it writes to Conductor's own database.** Conductor has no supported way to post a message into another local workspace's chat, so `babysitter` puts its messages in the same queue the app uses when you type one. They show in each workspace's chat starting with "Via Babysitter:", and so do the replies. This is undocumented: it backs up the database before the first message, and if a Conductor update breaks it, it falls back to Claude Code's `SendMessage`, which works but doesn't show in the chat. The Conductor app must be open. In the cloud, it uses the supported `conductor` CLI instead.
@@ -109,11 +114,21 @@ To keep a hand on the release, add an option (a flag or plain words both work):
 | `/babysitter --stop-after dev` | after full CI on `main` and the dev deploy are green; you release to production |
 | `/babysitter --stop-after merged` | once every change is merged and archived; no CI run on `main`, no deploys |
 
-You can also name the workspaces or milestones to cover: `/babysitter 2.1 2.3 --auto-prod`.
+You can also name the workspaces or milestones to cover: `/babysitter 2.1 2.3 --auto-prod`, and set the pace in plain words ("release once a day", "update me every 15 minutes"). By default it releases at most twice a day, even when you add workspaces mid-run. A `## babysitter` section in your `AGENTS.md`/`CLAUDE.md` can hold these defaults for every run (`mode: fast`, `stop after: dev`, `release: once a day`, `Timezone: America/New_York`).
+
+**Mode.** The first time babysitter runs in a repo it asks how much to do on its own, and how often you want digests (every 30 minutes by default; 15 minutes or an hour if you prefer), and offers to save the answers to your `## babysitter` section. Pass `--mode <name>` to set it for one run.
+
+| Mode | It decides alone | It asks you about | Releases |
+| --- | --- | --- | --- |
+| `cautious` | small, easily reversed choices | every merge to `main`, production, anything hard to reverse | once a day at most |
+| `standard` (default) | everything except scope, data model and migrations, money, security and privacy, things users see that are hard to change | those, plus production (once) | twice a day at most |
+| `fast` | everything except money, security and privacy, data loss, migrations | those; production goes out without asking | whenever something's ready |
+| `hyperspeed` | everything except money, security and privacy, irreversible data loss; it logs every call to Open Decisions | those only | whenever something's ready; wrap-up runs alongside the release |
+
 
 ### What you'll see
 
-- **In Babysitter HQ:** a digest about every hour, if anything changed (or when you ask "what's the latest?"): what just got done, in plain words about what your product gained; what's waiting on you; what each workspace is working on now; the open actions, decisions and tests; a table of every workspace with its stage and progress; and when the next digest is due. Between digests it stays silent, unless something needs you or something broke. Say "update me every 30 minutes" to change the pace. Times are in your timezone ("7:45 pm EDT"); in a cloud workspace it asks once, unless your `AGENTS.md`/`CLAUDE.md` names one (e.g. `Timezone: America/New_York`).
+- **In Babysitter HQ:** a digest every 30 minutes, on the clock, and whenever you ask ("what's the latest?" or `/status-check`): what just got done, in plain words about what your product gained; what's waiting on you; what each workspace is working on now; the critical path to the next release and what's holding it up; the open actions, decisions and tests by ID (`OA001`, `OD001`, `OT001` and up, so "Open decisions: 5 (OD005, OD016, OD021, OD027, OD031)"); how long each one should take and when the whole batch should be merged and released; a table of every workspace with its stage, effort (S to XL), progress, next step and ETA; and when the next digest is due. A quiet half hour still gets its digest, one line plus the table. Between digests it stays silent, unless something needs you or something broke. Say "update me every 15 minutes" (or "every hour") to change the pace. Times are in your timezone ("7:45 pm EDT"); in a cloud workspace it asks once, unless your `AGENTS.md`/`CLAUDE.md` names one (e.g. `Timezone: America/New_York`).
 - **In a workspace that's waiting on you:** its last message starts with `⚠️ BLOCKED: DECISION NEEDED: …` or `⚠️ BLOCKED: ACTION NEEDED: …`, with options and a recommendation or the steps. If a session stops and the babysitter can't get it going again, it leaves `⚠️ STOPPED (via Babysitter): …` there, saying what it tried and what you can do.
 - **On a team:** if your `AGENTS.md`/`CLAUDE.md` names more than one owner, each blocked item and each queue item says who should answer it. Otherwise everything goes to whoever ran `/babysitter`.
 
