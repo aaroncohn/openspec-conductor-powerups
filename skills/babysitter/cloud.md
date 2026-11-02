@@ -30,6 +30,10 @@ for m in json.load(sys.stdin)["data"]:
             if c.get("type") == "text": print(c["text"])' | tail -20
 ```
 
+## 2. The state file
+
+`state.py` works here as written. For the scan, pipe the CLI's list into it: `conductor workspace list --mine --repo "$REPO" --json --limit 100 | python3 <this skill's dir>/state.py sync-scan` (it skips `$CONDUCTOR_WORKSPACE_ID`). The CLI doesn't know stages or PRs, so after each scan set them yourself for anything that changed: `state.py workspace set <name> --stage apply --pr 12`.
+
 ## Stage in the workspace name
 
 Rename with `conductor workspace rename <workspaceId> --name <new name>`, starting from the name `workspace list` shows. You can't run `openspec status` in another sandbox, so judge `propose` versus `apply` from its pushed branch (the change has a `tasks.md`) or its transcript (it finished `/opsx:propose`). A workspace with an open PR but no OpenSpec change is `apply`. Judge by its newest PR: an older merged PR doesn't make it `archive` if it has newer work.

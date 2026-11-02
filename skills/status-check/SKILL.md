@@ -7,7 +7,7 @@ description: Where things stand, from whichever workspace it's run in. In Babysi
 
 Say where things stand, in the shape that fits the workspace you're in. Work out which one from this chat first; if it isn't obvious, check in this order:
 
-1. **Babysitter HQ:** `/babysitter` ran in this chat, or `.context/babysitter.md` exists here.
+1. **Babysitter HQ:** `/babysitter` ran in this chat, or `.context/babysitter.json` exists here.
 2. **A queue:** this chat's first message is the Open Actions, Open Decisions or Open Tests queue prompt ("You're the Open … queue for /babysitter").
 3. **Anything else:** a change workspace.
 
