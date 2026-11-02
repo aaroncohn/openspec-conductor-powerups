@@ -1,5 +1,5 @@
 {
-  "name": "openspec-conductor-powerups",
+  "name": "babysitter",
   "description": "Opinionated skills for people who use OpenSpec inside Conductor",
   "owner": {
     "name": "Aaron Cohn",
@@ -7,12 +7,9 @@
   },
   "plugins": [
     {
-      "name": "powerups",
+      "name": "babysitter",
       "source": "./",
       "description": "Start a batch of OpenSpec explorations in parallel Conductor workspaces, babysit them to production, pause and resume that, check where things stand from any workspace and that you're on the latest version, check each workspace is safe to archive, hand browser tasks from cloud workspaces to your local browser, and compare real options before a decision that matters."
     }
-  ],
-  "renames": {
-    "openspec-conductor-powerups": "powerups"
-  }
+  ]
 }

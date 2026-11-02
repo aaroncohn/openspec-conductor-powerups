@@ -18,7 +18,7 @@ Works the same locally and in the cloud: it only touches .context/babysitter.jso
   state.py counts                                    the digest's "Open actions: K (OA001, ...) · ..." line
   state.py show                                      everything, readable
   state.py digest-posted | last-digest               note a digest's time; print the last one
-  state.py pause | resume | paused                   /pause-babysitter and /resume-babysitter; pause and resume print
+  state.py pause | resume | paused                   `/babysitter:pause` and `/babysitter:keep-going`; pause and resume print
                                                      the sessions to hold or release. No state file: error, not HQ.
   state.py other-hq                                  stdin: as sync-scan; exits non-zero if another Babysitter HQ is open
 """
@@ -200,7 +200,7 @@ def bare(name):
 
 
 def show(state):
-    out = ([f"PAUSED since {state['paused']['since']}: do nothing on your own until /resume-babysitter", ""] if state.get("paused") else []) + ["options: " + (", ".join(f"{k}={v}" for k, v in sorted(state["options"].items())) or "(none)"),
+    out = ([f"PAUSED since {state['paused']['since']}: do nothing on your own until `/babysitter:keep-going`", ""] if state.get("paused") else []) + ["options: " + (", ".join(f"{k}={v}" for k, v in sorted(state["options"].items())) or "(none)"),
            "last digest: " + (state["digests"][-1] if state["digests"] else "(none)"), "", table(state), "", counts(state)]
     for item_id, it in open_items(state):
         out.append(f"- {item_id} · {it['title']} · {it['grade']}" + (f" · from {it['workspace']}" if it["workspace"] else ""))

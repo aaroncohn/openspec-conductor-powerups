@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check that powerups is current and that everything babysitter needs is in place. Read-only.
+"""Check that the plugin is current and that everything babysitter needs is in place. Read-only.
 
   doctor.py              print a table: ✓ fine, ⚠ worth knowing, ⛔ needs a fix (with the fix)
   doctor.py --send-test  also send a message to this session through babysitter's local path and confirm it lands
@@ -9,8 +9,8 @@ Cloud: also checks the conductor CLI's token and which cloud workspaces were cre
 """
 import datetime, glob, json, os, re, sqlite3, subprocess, sys
 
-REPO = "aaroncohn/openspec-conductor-powerups"
-PLUGIN = "powerups@openspec-conductor-powerups"
+REPO = "aaroncohn/babysitter"
+PLUGIN = "babysitter@babysitter"
 OUTBOX = ["message_id", "session_id", "delivery_payload", "config", "mode", "asset_ids", "queue_order", "state",
           "send_attempt_count", "next_send_attempt_at", "created_at", "updated_at"]  # what conductor-local.py send writes
 # The columns matching only proves the table is there. Conductor 0.92 kept the table and stopped draining the
@@ -48,8 +48,8 @@ def plugin_versions():
 
 
 def running_version():
-    # This script runs from the plugin cache: .../powerups/<sha>/skills/doctor/doctor.py; or from a checkout.
-    m = re.search(r"/powerups/([0-9a-f]{12,40})/skills/doctor/doctor\.py$", os.path.realpath(__file__))
+    # This script runs from the plugin cache: .../babysitter/<sha>/skills/doctor/doctor.py; or from a checkout.
+    m = re.search(r"/babysitter/([0-9a-f]{12,40})/skills/doctor/doctor\.py$", os.path.realpath(__file__))
     return short(m.group(1)) if m else "a checkout (--plugin-dir)"
 
 
@@ -63,18 +63,18 @@ def check_plugin(local):
     latest, latest_date = latest_release()
     running, installed = running_version(), plugin_versions()
     if not latest:
-        add("⚠", "latest powerups release", "couldn't reach GitHub", "check the network; skipping version checks")
+        add("⚠", "latest babysitter release", "couldn't reach GitHub", "check the network; skipping version checks")
     if not installed:
-        add("⛔", "powerups installed", "not in installed_plugins.json",
+        add("⛔", "babysitter installed", "not in installed_plugins.json",
             "claude plugin marketplace add %s && claude plugin install %s" % (REPO, PLUGIN) + (" --scope project" if not local else ""))
     for scope, sha, updated, project, _ in installed:
         where = f"{scope} scope" + (f" ({os.path.basename(project)})" if project else "")
         if latest and sha and not latest.startswith(sha) and not sha.startswith(latest):
-            add("⛔", f"powerups {where}", f"{sha}, latest is {latest}",
-                f"claude plugin marketplace update openspec-conductor-powerups && claude plugin update {PLUGIN}"
+            add("⛔", f"babysitter {where}", f"{sha}, latest is {latest}",
+                f"claude plugin marketplace update babysitter && claude plugin update {PLUGIN}"
                 + (f" --scope {scope}" if scope != "user" else ""))
         else:
-            add("✓", f"powerups {where}", f"{sha}, updated {updated.replace('T', ' ')}")
+            add("✓", f"babysitter {where}", f"{sha}, updated {updated.replace('T', ' ')}")
     current = any(sha.startswith(running) or running.startswith(sha) for _, sha, _, _, _ in installed if sha)
     if running.startswith("a checkout"):
         add("⚠", "this session runs", running, "fine for working on the plugin; users run the installed one")
@@ -126,7 +126,7 @@ def check_local():
         add("⛔", "outbox table", f"missing columns: {', '.join(missing)}", "a Conductor update changed the database: local messaging falls back to SendMessage; open an issue on the plugin")
     else:
         add("✓", "Conductor database and outbox table", "columns match what babysitter writes")
-    org = out(["python3", os.path.join(os.path.dirname(os.path.realpath(__file__)), "../babysitter/conductor-local.py"), "org"])
+    org = out(["python3", os.path.join(os.path.dirname(os.path.realpath(__file__)), "../hq/conductor-local.py"), "org"])
     add("⛔" if org.startswith("cloud") else "✓" if org.startswith("local") else "⚠", "organization switcher", org.split(":")[0] or "unknown",
         "switch Conductor's top-left switcher to the organization that shows this repo before new-batch-explore or babysitter open a Create dialog; on a cloud organization the dialog makes cloud workspaces on another repo" if not org.startswith("local") else "")
     root = os.path.dirname(out(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"]))
@@ -155,8 +155,8 @@ def check_cloud(latest_date):
         stale = [w.get("name", "?") for w in data if (w.get("createdAt") or w.get("created_at") or "") < latest_date
                  and w.get("id") != os.environ.get("CONDUCTOR_WORKSPACE_ID")]
         if stale:
-            add("⚠", "created before the latest powerups release", ", ".join(stale),
-                "probably on an older version; in each: claude plugin marketplace add %s --scope project && claude plugin install %s --scope project, then a new session. Queue and change workspaces don't need it; only where you'll type /powerups: commands" % (REPO, PLUGIN))
+            add("⚠", "created before the latest babysitter release", ", ".join(stale),
+                "probably on an older version; in each: claude plugin marketplace add %s --scope project && claude plugin install %s --scope project, then a new session. Queue and change workspaces don't need it; only where you'll type /babysitter: commands" % (REPO, PLUGIN))
 
 
 def report_queues(names):
@@ -182,7 +182,7 @@ def send_test(local):
             "select active_session_id from workspaces where workspace_path = ?", (os.path.realpath("."),)).fetchone()[0]
     except (sqlite3.Error, TypeError):
         return add("⛔", "send test", "can't find this workspace's session in Conductor's database", "run from a Conductor workspace")
-    script = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../babysitter/conductor-local.py")
+    script = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../hq/conductor-local.py")
     msg = os.path.join(".context", "doctor-send-test.md")
     os.makedirs(".context", exist_ok=True)
     open(msg, "w").write("Via Babysitter: doctor test. Ignore this message; reply with nothing.")
