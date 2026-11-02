@@ -15,7 +15,7 @@ Times are in the user's timezone, as in babysitter ("4:10 pm EST"), never UTC.
 
 ## In Babysitter HQ
 
-Post a digest now, exactly as babysitter's step 6 describes it: what happened, waiting on you, working on now with estimates, the critical path, the open counts with their IDs, the workspace table from a fresh scan, and when the next scheduled digest is due. Don't shorten it because it was asked for: the table is the point. Doesn't reset the digest clock.
+Post a digest now, exactly as babysitter's step 6 describes it: what happened, waiting on you, working on now with estimates, the critical path, the open counts with their IDs, the workspace table from a fresh scan, and when the next scheduled digest is due. Don't shorten it because it was asked for: the table is the point. Doesn't reset the digest clock. If `state.py paused` says it's paused, open with "Paused since <time>." and leave out the next digest's time.
 
 ## In Open Actions, Open Decisions or Open Tests
 

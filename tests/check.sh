@@ -24,6 +24,10 @@ grep -q '^| workspace | stage | effort | progress | next step | ETA | babysitter
 grep -q 'Via Babysitter: ' skills/babysitter/SKILL.md skills/babysitter/cloud.md || fail "Via Babysitter prefix missing"
 ! grep -rnE '[^`/]/opsx:propose[^`]' skills/*/SKILL.md skills/*/cloud.md skills/*/examples/*.md || fail "a user-facing /opsx:propose is not in backticks (Conductor cuts it at the colon)"
 ! grep -n 'conductor workspace create' skills/*/cloud.md | grep -v -- '--repo-url' || fail "a conductor workspace create without --repo-url (the CLI guesses the project otherwise)"
+grep -q 'state.py other-hq' skills/babysitter/SKILL.md && grep -q 'state.py other-hq' skills/babysitter/cloud.md || fail "babysitter must check for another HQ, locally and in the cloud"
+grep -q 'most recent message starts with "Babysitter is paused."' skills/babysitter/SKILL.md || fail "the goal must clear on pause, or /goal keeps HQ running"
+grep -q '^Babysitter is paused\.' skills/pause-babysitter/SKILL.md || fail "pause must post the line the goal's condition looks for"
+for n in pause-babysitter resume-babysitter; do grep -q '^disable-model-invocation: true$' "skills/$n/SKILL.md" || fail "$n must only run when the user types it"; done
 echo "✓ prompt invariants hold"
 
 # 3. Every skill is listed in the README and has frontmatter; the manifests are valid JSON.

@@ -56,24 +56,31 @@ For every in-scope change:
 
 Then (unless an option says to stop earlier) the latest `main` is verified on dev, promoted to production, and verified there, and the final report has been posted.
 
+## Before anything else: one HQ per repo
+
+Only one babysitter may drive a repo's workspaces. Check first, before the goal, the mode question or any message:
+
+```bash
+git fetch origin -q
+python3 <this skill's dir>/conductor-local.py scan > .context/scan.jsonl
+python3 <this skill's dir>/state.py other-hq < .context/scan.jsonl
+```
+
+In the cloud, see `cloud.md`. If `other-hq` exits non-zero, stop here: change nothing, and tell the user "Babysitter HQ is already open for this repo: <where>. Use that one (`/resume-babysitter` if it's paused), or archive it and run `/babysitter` here again." If the scan itself fails, say you couldn't check, and carry on.
+
 ## 0. Set the goal
 
 If a tool for proposing a session goal is available, propose this condition with it (trimmed to match `--stop-after`, if given). Otherwise print it for the user to paste, and carry on without waiting:
 
 ```
-/goal Every workspace in .context/babysitter.json has its change merged into main and archived, full CI on main is green after the last merge, the latest main is promoted to production and verified, and the babysitter final report (with the Open Decisions, Open Tests and Open Actions counts) has been posted.
+/goal Every workspace in .context/babysitter.json has its change merged into main and archived, full CI on main is green after the last merge, the latest main is promoted to production and verified, and the babysitter final report (with the Open Decisions, Open Tests and Open Actions counts) has been posted; or babysitter's most recent message starts with "Babysitter is paused."
 ```
 
 ## 1. Find the workspaces
 
 If the user named workspaces or milestones after `/babysitter`, cover exactly those. Otherwise detect them:
 
-```bash
-git fetch origin -q
-python3 <this skill's dir>/conductor-local.py scan    # one JSON line per open workspace of this repo
-```
-
-Each line has the workspace's name, path, branch, chat session id and status, its OpenSpec changes that aren't archived on `origin/main`, its PR (the open one, otherwise the newest: number and state), and its stage (see "Stage in the workspace name"). It only reads Conductor's database. If it fails, fall back to `git worktree list --porcelain` and `git ls-tree --name-only origin/main openspec/changes/archive/`, and work these out by hand.
+`.context/scan.jsonl`, from the check above, has one JSON line per open workspace of this repo (`conductor-local.py scan` makes a fresh one). Each line has the workspace's name, path, branch, chat session id and status, its OpenSpec changes that aren't archived on `origin/main`, its PR (the open one, otherwise the newest: number and state), and its stage (see "Stage in the workspace name"). It only reads Conductor's database. If it fails, fall back to `git worktree list --porcelain` and `git ls-tree --name-only origin/main openspec/changes/archive/`, and work these out by hand.
 
 A worktree other than this one is **in scope** when `openspec/changes/` (skip `archive/`, include uncommitted files) has a change that isn't archived on `origin/main`. It's also in scope when it has work that isn't on `origin/main` (uncommitted changes, an open PR, or commits whose content isn't on `origin/main`), or when its session last stopped asking whether to commit, open a PR or merge: drive that work to merge too. Other worktrees are still exploring. Leave them alone and list them as skipped.
 
@@ -167,6 +174,7 @@ Then answer whatever the session last stopped on (e.g. "Yes, run `/opsx:apply`",
 
   If there's nothing worth posting right away (step 6), restart the watcher without posting.
 - **Stop babysitting:** when the user says to stop babysitting a workspace, stop messaging and watching it, mark it (`state.py workspace set <name> --monitoring no --waiting "stopped by user"`), and don't adopt it again on a re-scan unless the user asks. Confirm in one line.
+- **Paused** (`/pause-babysitter`, or the user says to pause; `state.py paused` tells you): do nothing on your own until `/resume-babysitter`, or the user says to resume. No messages, merges, renames, adoptions, watcher or scheduled digests. If a notice or a finished session wakes you, end the turn with no text. If the user asks where things stand, answer with a digest from a fresh scan, opening with "Paused since <time>." The queues keep taking the user's answers; handle them on resume.
 - Don't poll in a loop yourself. Between events, end the turn quietly (step 6). For PR checks you're waiting on, `gh pr checks <n> --watch` is fine.
 
 ## Blocking or batch
