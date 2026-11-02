@@ -6,7 +6,7 @@ A Claude Code plugin, `powerups`, with opinionated skills for people who use Ope
 
 - `.claude-plugin/plugin.json`: the plugin. `name` is `powerups`. No `version`, on purpose.
 - `.claude-plugin/marketplace.json`: the marketplace, `openspec-conductor-powerups`, with one plugin at `./`.
-- `skills/<name>/SKILL.md`: one skill each. `cloud.md` beside it holds the cloud steps. `skills/babysitter/conductor-local.py` holds babysitter's local, deterministic steps (scan, send, watch).
+- `skills/<name>/SKILL.md`: one skill each. `cloud.md` beside it holds the cloud steps. `skills/babysitter/conductor-local.py` holds babysitter's local, deterministic steps (scan, send, watch); `skills/babysitter/state.py` keeps its state file (IDs, workspace table, counts) and works locally and in the cloud.
 
 ## Releases
 
@@ -24,7 +24,7 @@ Never add a `version` to plugin.json. Never rename the plugin (`powerups`) or th
    claude plugin install powerups@openspec-conductor-powerups
    ```
 3. For a live run, start a session with `claude --plugin-dir .`.
-4. If you touched `conductor-local.py`: `python3 -m py_compile skills/babysitter/conductor-local.py`, and keep the asserts in `check_stage()` passing (they run first on `scan`). Add an assert when you change stage logic.
+4. If you touched `conductor-local.py` or `state.py`: `python3 -m py_compile` it, and keep its asserts passing (`check_stage()` runs first on `scan`; `state.py`'s `check()` runs first on every command). Add an assert when you change logic.
 
 ## Local and cloud
 

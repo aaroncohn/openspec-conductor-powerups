@@ -43,7 +43,7 @@ The mode says how much the babysitter does on its own. Four, from careful to all
 
 A flaky CI job on `main` is re-run once without asking in every mode (step 7.1). Pick the mode this way, in order: `--mode <name>` or plain words after `/babysitter` ("go fast", "be careful") for this run; else `mode:` in the repo's `## babysitter` section; else ask, once, the first time babysitter runs in this repo, in its own short message that explains the four modes in two lines each (what it decides alone, what it asks you about), recommends **standard**, and asks which to use. In the same message, ask how often they want digests: every 30 minutes is the default; would they rather every 15 minutes or every hour? When they answer, suggest adding `mode: <name>` and `digests: <interval>` to the `## babysitter` section so the next run doesn't ask. Until they answer, run as **standard** with digests every 30 minutes. Explicit flags (`--auto-prod`, `--stop-after`, a release cadence) win over what the mode implies.
 
-Record the mode and the other options in the state file and apply them to the goal, the "Done means" list, and the final report. Name the mode in the first message and the final report.
+Record the mode and the other options in the state file (`state.py option set mode fast`, `option set digests "every 15 minutes"`, step 2) and apply them to the goal, the "Done means" list, and the final report. Name the mode in the first message and the final report.
 
 ## Done means
 
@@ -61,7 +61,7 @@ Then (unless an option says to stop earlier) the latest `main` is verified on de
 If a tool for proposing a session goal is available, propose this condition with it (trimmed to match `--stop-after`, if given). Otherwise print it for the user to paste, and carry on without waiting:
 
 ```
-/goal Every workspace in .context/babysitter.md has its change merged into main and archived, full CI on main is green after the last merge, the latest main is promoted to production and verified, and the babysitter final report (with the Open Decisions, Open Tests and Open Actions counts) has been posted.
+/goal Every workspace in .context/babysitter.json has its change merged into main and archived, full CI on main is green after the last merge, the latest main is promoted to production and verified, and the babysitter final report (with the Open Decisions, Open Tests and Open Actions counts) has been posted.
 ```
 
 ## 1. Find the workspaces
@@ -91,11 +91,18 @@ Then put each workspace's stage in its name (see "Stage in the workspace name"),
 
 Also learn the repo's conventions before the first message: CI workflows and labels (which checks are quick and which are full, how the full suite is triggered), AGENTS.md / CLAUDE.md / README rules for PRs and commit authors, how past archive PRs looked (`gh pr list --state merged -L 10`), and how dev and production deploy and get verified.
 
-If the repo has values two sessions could both claim (ordered migration timestamps, sequence or build numbers, a shared counter), hand each session its value in the brief and keep the list in the state file. Two sessions picking the same migration timestamp costs each a rebase, a fix and a re-test.
+If the repo has values two sessions could both claim (ordered migration timestamps, sequence or build numbers, a shared counter), hand each session its value in the brief and keep the list in `.context/babysitter-notes.md`. Two sessions picking the same migration timestamp costs each a rebase, a fix and a re-test.
 
 ## 2. Keep a state file
 
-`.context/babysitter.md` has one row per change: workspace, session name, branch, change, PR, archive PR, stage (`building → testing → PR open → merged → post-merge checks → archived`), what the session is waiting on, and notes. Also keep every item sent to Open Decisions, Open Tests and Open Actions (step 9) with its ID (step 9, "IDs"), a few words on what it is, and its status: open, answered, passed, failed, done, or skipped. Update it after every event. After a context compaction, re-read it before acting.
+`state.py` (next to this file; `python3 <this skill's dir>/state.py`) keeps `.context/babysitter.json`, so IDs, counts and the workspace table come from a script, not from memory. Never edit the file by hand. It holds:
+
+- **options**: `state.py option set <key> <value>` (mode, digests, release, stop-after, tz).
+- **one row per workspace**: `state.py workspace set <name> --stage apply --effort M --progress "PR open, checks running" --next "rebase and merge" --eta "~2 h, 4 pm EST" --monitoring yes --pr 12 --waiting "<what it's waiting on>"`. Set only the fields that changed. `--gone` when a workspace is archived. Locally, `conductor-local.py scan | state.py sync-scan` fills in name, stage, PR and session for every open workspace and marks the missing ones gone; run it before every digest. In the cloud, see `cloud.md`.
+- **every queue item** (step 9): `state.py item add OD "<a few words>" --grade normal --workspace <name>` prints its ID; `state.py item set OD017 --status answered --note "<the answer>"`; `state.py item list --open`.
+- **digest times**: `state.py digest-posted` after each one; `state.py last-digest`.
+
+`state.py show` prints all of it, readable. Run it after a context compaction, before acting. Keep notes that don't fit a field (what a session said, what you told it) in `.context/babysitter-notes.md`, by hand.
 
 **Times are in the user's timezone.** Every time you write, in this chat, in messages to sessions and queues, in the state file and in logs, is in the user's timezone, 12-hour with the zone's current abbreviation: "7:45 pm EDT", never UTC. Work out the zone once, before you first write a time (also when you switch to this skill partway through a run), and keep its name in the state file (e.g. `America/New_York`):
 
@@ -115,7 +122,7 @@ Start each workspace's name with its OpenSpec stage, so the sidebar shows where 
 | `apply` | planning is complete, until its PR is merged; or it has work outside `openspec/` that isn't on `origin/main` (an open PR, or commits or edits), with or without a change |
 | `archive` | its PR is merged and nothing newer is in progress; it keeps this prefix after the archive PR merges |
 
-Locally, `conductor-local.py scan` works the stage out for you (step 1). Remove any earlier stage prefix before adding the new one, so prefixes never stack, and leave the rest of the name alone. Record the stage in the state file. Locally, rename the way a manual rename in the sidebar does (Conductor's database, backed up above):
+Locally, `conductor-local.py scan` works the stage out for you (step 1). Remove any earlier stage prefix before adding the new one, so prefixes never stack, and leave the rest of the name alone. Locally, `sync-scan` records the stage; in the cloud, `state.py workspace set <name> --stage <stage>`. Rename the way a manual rename in the sidebar does (Conductor's database, backed up above):
 
 ```bash
 sqlite3 "$CONDUCTOR_DB_PATH" "update workspaces set workspace_name='<new name>', user_set_workspace_name=1 where workspace_path='<worktree path>'"
@@ -159,7 +166,7 @@ Then answer whatever the session last stopped on (e.g. "Yes, run `/opsx:apply`",
   - adopt any workspace that has newly come into scope (for example, the user just ran `/opsx:propose` or `/opsx:apply` there). Brief its session (step 3), add it to the watcher, and mention it in the next digest (step 6).
 
   If there's nothing worth posting right away (step 6), restart the watcher without posting.
-- **Stop babysitting:** when the user says to stop babysitting a workspace, stop messaging and watching it, mark it `stopped by user` in the state file, and don't adopt it again on a re-scan unless the user asks. Confirm in one line.
+- **Stop babysitting:** when the user says to stop babysitting a workspace, stop messaging and watching it, mark it (`state.py workspace set <name> --monitoring no --waiting "stopped by user"`), and don't adopt it again on a re-scan unless the user asks. Confirm in one line.
 - Don't poll in a loop yourself. Between events, end the turn quietly (step 6). For PR checks you're waiting on, `gh pr checks <n> --watch` is fine.
 
 ## Blocking or batch
@@ -172,7 +179,7 @@ The goal is speed without lowering quality. So most decisions and actions don't 
 
 **Batch** is everything else: copy, naming, small UX choices, defaults that are easy to change later, follow-ups, and actions the work can ship without (it degrades gracefully until they're done). Batch items go to Open Decisions or Open Actions (step 9), and any change they lead to goes in a future PR.
 
-When unsure, prefer batch if the choice can be reversed in a small later PR; otherwise blocking. A blocking item stays in the workspace where it came up: its session asks the user there, under a `⚠️ BLOCKED:` first line (step 3, rule 1), and waits, while the other workspaces keep going. Record each blocking item in the state file with its workspace.
+When unsure, prefer batch if the choice can be reversed in a small later PR; otherwise blocking. A blocking item stays in the workspace where it came up: its session asks the user there, under a `⚠️ BLOCKED:` first line (step 3, rule 1), and waits, while the other workspaces keep going. Record each blocking item: `state.py workspace set <name> --waiting "your decision: <a few words>"`.
 
 **Big things first.** Act like a product manager: the few items that move the release or change what users get come first, in your attention, in the digests and in the queues. Small, easily fixed or reversible things (a label, a default, a cosmetic test, a tidy-up) never hold up a merge, an archive or a release, and never wait their turn ahead of something that matters. Grade every item you send to a queue: **release-blocking** (the release waits on it), **normal**, or **minor** (easy to fix or reverse later). The queues present them in that order. If you catch yourself spending a digest on a minor item, or a session circling one, settle it with the recommended option, log it as minor, and move on.
 
@@ -195,24 +202,24 @@ Everything else waits for the next digest: a PR opened, a merge, an archive, an 
 
 **Don't say what didn't happen**, in a digest or anywhere else in this chat: no "Nothing needs you right now", "No answers since the last digest" or "Nothing new on the others". Leave that part out; a missing part means there's nothing to report. The one exception is a quiet digest's opening line (below).
 
-**Digests**, as if the user walked into the room and asked "what's the latest on all this?". Post one every 30 minutes (or at whatever interval the user asked for), on the clock, and whenever the user asks ("what's the latest?", "status?", `/status-check`). Note the time of each in the state file. A digest is always the full shape below, table included; never a bare paragraph or a list of bullets on its own. When nothing moved since the last one, the first part is one line ("Quiet half hour: everything's still running, nothing finished") and the rest is as usual, so the user always has a current table. In this order:
+**Digests**, as if the user walked into the room and asked "what's the latest on all this?". Post one every 30 minutes (or at whatever interval the user asked for), on the clock, and whenever the user asks ("what's the latest?", "status?", `/status-check`). After posting one, `state.py digest-posted`. A digest is always the full shape below, table included; never a bare paragraph or a list of bullets on its own. When nothing moved since the last one, the first part is one line ("Quiet half hour: everything's still running, nothing finished") and the rest is as usual, so the user always has a current table. In this order:
 
 1. **What happened**, in a short paragraph or two of plain words, biggest thing first: what finished or moved since the last digest, said as what the product's users get and why it's better, e.g. "The profile-photo workspace opened PR #259. Photos keep their shape, there's a "replace photo" option, and the edit-photo popup is clearer." Fold in, briefly, anything you sorted out along the way ("It had taken a roadmap number another change already uses, so I asked it to move to the next free one"), workspaces you renamed, and each workspace you took over: "Babysitter is taking over <workspace name> now to keep it moving forward. You can tell me to stop babysitting it at any time."
 2. **Waiting on you:** one line per open blocking item or `⚠️ STOPPED` workspace, with the workspace to go to. Leave it out when there are none.
 3. **Working on now:** a bullet per workspace you're babysitting that isn't done, the one that matters most to the release first: the feature in words (with its PR or roadmap number), what it's doing, what's next, and when you expect it merged, e.g. "**Instant email sign-in (#252):** one unrelated test failed, so it's being re-run on its own. Merged in about an hour, around 4 pm EST." Then one line for the whole run: when everything should be merged, and when it should release given the release cadence ("Everything merged around 6 pm EST; release in tomorrow morning's window").
 4. **Critical path:** the chain of things that has to happen, in order, before the next release can go out, each with who or what it's waiting on, and the link that's holding it up marked, e.g. "spam check: e2e suite (running, ~40 min) → rebase and merge → archive PR → full CI on main → dev → **your go** → production. Holding it up: the e2e suite." Work it out from the workspaces still open, the release cadence and the open blocking items; it's the longest chain, not every chain. One short list, or one line when only one workspace is left.
-5. **Open actions: K · Open decisions: N · Open tests: M**, the counts in those three workspaces (step 9), each followed by the open IDs ("Open decisions: 5 (OD005, OD016, OD021, OD027, OD031)"), plus one line on any answer that came back and what you did with it.
-6. **The workspace table:** one row per open workspace of this repo except this one and the three queues, from a fresh scan, with these columns:
-   - **workspace**: its name
+5. **Open actions: K · Open decisions: N · Open tests: M**: the output of `state.py counts`, pasted as is (each count followed by its open IDs), plus one line on any answer that came back and what you did with it.
+6. **The workspace table:** the output of `state.py table`, pasted as is. Before running it: a fresh scan piped into `state.py sync-scan` (locally; in the cloud see `cloud.md`), then `state.py workspace set` for anything that moved. Its columns:
+   - **workspace**: its name, with its PR number
    - **stage**: explore, propose, apply or archive
-   - **effort**: S, M, L or XL, how big its whole task is next to the project's other changes. Use the roadmap's own size if it has one; otherwise estimate it once from the change's tasks and keep it in the state file, so it doesn't drift between digests.
+   - **effort**: S, M, L or XL, how big its whole task is next to the project's other changes. Use the roadmap's own size if it has one; otherwise estimate it once from the change's tasks and set it once, so it doesn't drift between digests.
    - **progress**: what's done so far
    - **next step**: what has to happen to finish, in a few words ("rebase and merge", "archive PR", "waiting on your decision in that workspace")
    - **ETA**: when it should be merged, as a duration and a time ("~2 h, around 4 pm EST"), or "on you" when it's waiting on the user
    - **babysitter monitoring?**: narrow, `x` for the ones you're babysitting
 7. The last line says when the next digest is due: "Next digest around <time>, if anything changes." (e.g. "around 7:45 pm EDT, if anything changes")
 
-**Estimates.** Whenever you say what's being worked on, say how long it should take. Base it on the effort column, the stage, and the pace you've seen in this run (how long similar steps took here: a test run, a PR's checks, an archive). Keep each estimate in the state file; when the next digest comes, don't move it quietly: say it slipped and why ("the e2e suite took twice as long as last time"). Round to what you know: "about 2 hours" beats "1 h 47 min". With no basis, say "no estimate yet" rather than invent one.
+**Estimates.** Whenever you say what's being worked on, say how long it should take. Base it on the effort column, the stage, and the pace you've seen in this run (how long similar steps took here: a test run, a PR's checks, an archive). Set each estimate with `state.py workspace set <name> --eta`; when the next digest comes, don't move it quietly: say it slipped and why ("the e2e suite took twice as long as last time"). Round to what you know: "about 2 hours" beats "1 h 47 min". With no basis, say "no estimate yet" rather than invent one.
 
 **Plain words everywhere:** name each feature in words, not just its roadmap ID ("2.2b, the spam check"). Leave out test counts, file names, task numbers, CI job names and internal labels unless something failed or the user has to act on them; then say what it means for the user. The only codes are the queue IDs (OA001, OD001, OT001, step 9), and each comes with a few words on what it is.
 
@@ -250,9 +257,9 @@ Actions only the user can do, decisions the user may want to revisit, and tests 
 - **Open Tests** gets every test only the user can do. Send each one once its feature is live where the user can test it (dev or production), not before.
 - **Open Actions** gets every action only the user can do that isn't a decision or a test (step 5): secrets and environment variables, accounts, payment methods, dashboard settings, DNS, as long as it's batch, not blocking. Send each one as soon as it's known. Ones the release waits on go first.
 
-**IDs.** Every item gets an ID when you send it, unique within the repo for as long as the queues live: `OA001`, `OA002`… for actions, `OD001`… for decisions, `OT001`… for tests (three digits, then four if a repo ever gets there). The ID is how the user, the queue and the digests refer to it, with a few words on what it is ("OD016, the spam-check threshold"); never a running position like "7 of 3". Keep the next number for each queue in the state file. At the start of a run, before the first item, read the highest ID each existing queue workspace has seen (its transcript, or ask its session "what's the highest ID you've been sent?") and continue from there, so a new Babysitter HQ never reuses a number. With no queue workspace, start at 001.
+**IDs.** Every item gets an ID when you send it, unique within the repo for as long as the queues live: `OA001`, `OA002`… for actions, `OD001`… for decisions, `OT001`… for tests (three digits, then four if a repo ever gets there). The ID is how the user, the queue and the digests refer to it, with a few words on what it is ("OD016, the spam-check threshold"); never a running position like "7 of 3". `state.py item add` hands out the next number. At the start of a run, before the first item, read the highest ID each existing queue workspace has seen (its transcript, or ask its session "what's the highest ID you've been sent?") and `state.py item seed OD <that number>`, so a new Babysitter HQ never reuses a number. With no queue workspace, numbering starts at 001.
 
-An existing queue from an older babysitter (its first message has no IDs, items say "Decision 3 of 5") keeps working, but bring it up to date before sending it anything: send it the queue prompt below as a "Via Babysitter:" message, and ask it to give each item it still has open an ID from 001 up, oldest first, grade each (release-blocking, normal, minor), and reply with the list. Record those in the state file and continue numbering after them. Items already answered there stay as they were.
+An existing queue from an older babysitter (its first message has no IDs, items say "Decision 3 of 5") keeps working, but bring it up to date before sending it anything: send it the queue prompt below as a "Via Babysitter:" message, and ask it to give each item it still has open an ID from 001 up, oldest first, grade each (release-blocking, normal, minor), and reply with the list. Add each to the state file (`state.py item add`, in that order, so the IDs match), and numbering continues after them. Items already answered there stay as they were.
 
 **Find or create the workspace.** Before sending an item, look for an open workspace of this repo named `Open Actions`, `Open Decisions` or `Open Tests`. If there is one, send the item to its session. If there isn't (e.g. the last one was finished and archived), create a new one with the queue prompt below as its first message, then send items to it. Locally, create it the way `new-batch-explore` does (a `conductor://new` link the user confirms with Enter, then the name set in Conductor's database) and tell the user to press Enter. In the cloud, see `cloud.md`. Never stage-rename these three workspaces.
 
@@ -305,8 +312,8 @@ For a **test**: assume the user hasn't followed the build. They don't know the n
 End with: reply "pass", "fail: <what happened>", or "skip". On a fail, the queue asks at most one follow-up if it helps pin the bug down (a screenshot, or exactly what they clicked).
 
 **Handle the answers.** Watch the queue sessions like the others (step 4). When one posts "Done:", "Answered:" or "Result:":
-- **Action done:** check it took effect where you can (the variable is listed, the deploy picks it up, the page responds), mark it done, and continue whatever was waiting on it. If it didn't take effect, send a follow-up action saying what's still missing.
-- **Kept, skipped, or passed:** mark it done in the state file. A skipped action that holds up the release stays under **Waiting on you** in the digests.
+- **Action done:** check it took effect where you can (the variable is listed, the deploy picks it up, the page responds), `state.py item set <ID> --status done`, and continue whatever was waiting on it. If it didn't take effect, send a follow-up action saying what's still missing.
+- **Kept, skipped, or passed:** `state.py item set <ID> --status answered|skipped|passed`. A skipped action that holds up the release stays under **Waiting on you** in the digests.
 - **Reversed decision or failed test:** send the fix to the session of the workspace where that work happened, as a normal "Via Babysitter:" brief, and drive it to merge like any other change. Its tests go back to Open Tests once the fix is live. If that workspace is gone or archived, open a follow-up the same way (a new workspace with a self-contained brief), and babysit it.
 - Report it in the next digest, and update the counts.
 
