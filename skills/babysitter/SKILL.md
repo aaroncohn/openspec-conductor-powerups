@@ -191,15 +191,16 @@ The user wants to know, regularly, that everything is moving: what just got done
 
 Everything else waits for the next digest: a PR opened, a merge, an archive, an adopted workspace, a rename, an answer from a queue, and anything you told a session to do. Never post a message of its own just to say that nothing needs the user, when the next digest is, what you checked, or what you asked a session to do ("I'm asking that session to renumber", "Restarted the watcher", "The other three are still testing").
 
-**Don't say what didn't happen**, in a digest or anywhere else in this chat: no "Nothing needs you right now", "No answers since the last digest" or "Nothing new on the others". Leave that part out; a missing part means there's nothing to report.
+**Don't say what didn't happen**, in a digest or anywhere else in this chat: no "Nothing needs you right now", "No answers since the last digest" or "Nothing new on the others". Leave that part out; a missing part means there's nothing to report. The one exception is a quiet digest's opening line (below).
 
-**Digests**, as if the user walked into the room and asked "what's the latest on all this?". Post one when the user asks, and otherwise about every hour (or at whatever interval the user asked for) if something changed since the last one. Note the time of each in the state file. If nothing changed, skip it. In this order:
+**Digests**, as if the user walked into the room and asked "what's the latest on all this?". Post one every hour (or at whatever interval the user asked for), on the clock, and whenever the user asks ("what's the latest?", "status?", `/status-check`). Note the time of each in the state file. A digest is always the full shape below, table included; never a bare paragraph or a list of bullets on its own. When nothing moved since the last one, the first part is one line ("Quiet hour: everything's still running, nothing finished") and the rest is as usual, so the user always has a current table. In this order:
 
 1. **What happened**, in a short paragraph or two of plain words: what finished or moved since the last digest, said as what the product's users get and why it's better, e.g. "The profile-photo workspace opened PR #259. Photos keep their shape, there's a "replace photo" option, and the edit-photo popup is clearer." Fold in, briefly, anything you sorted out along the way ("It had taken a roadmap number another change already uses, so I asked it to move to the next free one"), workspaces you renamed, and each workspace you took over: "Babysitter is taking over <workspace name> now to keep it moving forward. You can tell me to stop babysitting it at any time."
 2. **Waiting on you:** one line per open blocking item or `⚠️ STOPPED` workspace, with the workspace to go to. Leave it out when there are none.
 3. **Working on now:** a bullet per workspace you're babysitting that isn't done: the feature in words (with its PR or roadmap number), what it's doing, what's next, and when you expect it merged, e.g. "**Instant email sign-in (#252):** one unrelated test failed, so it's being re-run on its own. Merged in about an hour, around 4 pm EST." Then one line for the whole run: when everything should be merged, and when it should release given the release cadence ("Everything merged around 6 pm EST; release in tomorrow morning's window").
-4. **Open actions: K · Open decisions: N · Open tests: M**, the counts in those three workspaces (step 9), each followed by the open IDs ("Open decisions: 5 (OD005, OD016, OD021, OD027, OD031)"), plus one line on any answer that came back and what you did with it.
-5. **The workspace table:** one row per open workspace of this repo except this one and the three queues, from a fresh scan, with these columns:
+4. **Critical path:** the chain of things that has to happen, in order, before the next release can go out, each with who or what it's waiting on, and the link that's holding it up marked, e.g. "spam check: e2e suite (running, ~40 min) → rebase and merge → archive PR → full CI on main → dev → **your go** → production. Holding it up: the e2e suite." Work it out from the workspaces still open, the release cadence and the open blocking items; it's the longest chain, not every chain. One short list, or one line when only one workspace is left.
+5. **Open actions: K · Open decisions: N · Open tests: M**, the counts in those three workspaces (step 9), each followed by the open IDs ("Open decisions: 5 (OD005, OD016, OD021, OD027, OD031)"), plus one line on any answer that came back and what you did with it.
+6. **The workspace table:** one row per open workspace of this repo except this one and the three queues, from a fresh scan, with these columns:
    - **workspace**: its name
    - **stage**: explore, propose, apply or archive
    - **effort**: S, M, L or XL, how big its whole task is next to the project's other changes. Use the roadmap's own size if it has one; otherwise estimate it once from the change's tasks and keep it in the state file, so it doesn't drift between digests.
@@ -207,13 +208,13 @@ Everything else waits for the next digest: a PR opened, a merge, an archive, an 
    - **next step**: what has to happen to finish, in a few words ("rebase and merge", "archive PR", "waiting on your decision in that workspace")
    - **ETA**: when it should be merged, as a duration and a time ("~2 h, around 4 pm EST"), or "on you" when it's waiting on the user
    - **babysitter monitoring?**: narrow, `x` for the ones you're babysitting
-6. The last line says when the next digest is due: "Next digest around <time>, if anything changes." (e.g. "around 7:45 pm EDT, if anything changes")
+7. The last line says when the next digest is due: "Next digest around <time>, if anything changes." (e.g. "around 7:45 pm EDT, if anything changes")
 
 **Estimates.** Whenever you say what's being worked on, say how long it should take. Base it on the effort column, the stage, and the pace you've seen in this run (how long similar steps took here: a test run, a PR's checks, an archive). Keep each estimate in the state file; when the next digest comes, don't move it quietly: say it slipped and why ("the e2e suite took twice as long as last time"). Round to what you know: "about 2 hours" beats "1 h 47 min". With no basis, say "no estimate yet" rather than invent one.
 
 **Plain words everywhere:** name each feature in words, not just its roadmap ID ("2.2b, the spam check"). Leave out test counts, file names, task numbers, CI job names and internal labels unless something failed or the user has to act on them; then say what it means for the user. The only codes are the queue IDs (OA001, OD001, OT001, step 9), and each comes with a few words on what it is.
 
-The first message and the final report have the table too.
+The first message and the final report have the table too. Prose and the table do different jobs: the prose says what it means for the user, the table lets them scan every workspace at once. Each digest needs both.
 
 Decisions you made for the user, tests only they can do, and actions only they can do don't go here: they go to Open Decisions, Open Tests and Open Actions (step 9).
 
