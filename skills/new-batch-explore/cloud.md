@@ -41,7 +41,7 @@ After the last decision is answered, summarize every decision in one table and e
 No dialog is involved, so create them all after the user confirms the picks. Write each prompt to a file first to avoid shell quoting problems:
 
 ```bash
-conductor workspace create --name "m{id}-{short-name}" --branch "$BASE" --agent claude \
+conductor workspace create --repo-url "$(git remote get-url origin)" --name "m{id}-{short-name}" --branch "$BASE" --agent claude \
   --message-file .context/explore-{id}.md --json
 ```
 

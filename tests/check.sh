@@ -22,6 +22,7 @@ grep -q '^\*\*Critical path:\*\*' skills/babysitter/examples/digest.md || fail "
 grep -q '^| workspace | stage | effort | progress | next step | ETA | babysitter monitoring? |' skills/babysitter/examples/digest.md || fail "digest example table columns differ from state.py"
 grep -q 'Via Babysitter: ' skills/babysitter/SKILL.md skills/babysitter/cloud.md || fail "Via Babysitter prefix missing"
 ! grep -rnE '[^`/]/opsx:propose[^`]' skills/*/SKILL.md skills/*/cloud.md skills/*/examples/*.md || fail "a user-facing /opsx:propose is not in backticks (Conductor cuts it at the colon)"
+! grep -n 'conductor workspace create' skills/*/cloud.md | grep -v -- '--repo-url' || fail "a conductor workspace create without --repo-url (the CLI guesses the project otherwise)"
 echo "✓ prompt invariants hold"
 
 # 3. Every skill is listed in the README and has frontmatter; the manifests are valid JSON.
