@@ -197,7 +197,7 @@ Everything else waits for the next digest: a PR opened, a merge, an archive, an 
 
 1. **What happened**, in a short paragraph or two of plain words: what finished or moved since the last digest, said as what the product's users get and why it's better, e.g. "The profile-photo workspace opened PR #259. Photos keep their shape, there's a "replace photo" option, and the edit-photo popup is clearer." Fold in, briefly, anything you sorted out along the way ("It had taken a roadmap number another change already uses, so I asked it to move to the next free one"), workspaces you renamed, and each workspace you took over: "Babysitter is taking over <workspace name> now to keep it moving forward. You can tell me to stop babysitting it at any time."
 2. **Waiting on you:** one line per open blocking item or `⚠️ STOPPED` workspace, with the workspace to go to. Leave it out when there are none.
-3. **Working on now:** a bullet per workspace you're babysitting that isn't done: the feature in words (with its PR or roadmap number), what it's doing, and what's next, e.g. "**Instant email sign-in (#252):** one unrelated test failed, so it's being re-run on its own."
+3. **Working on now:** a bullet per workspace you're babysitting that isn't done: the feature in words (with its PR or roadmap number), what it's doing, what's next, and when you expect it merged, e.g. "**Instant email sign-in (#252):** one unrelated test failed, so it's being re-run on its own. Merged in about an hour, around 4 pm EST." Then one line for the whole run: when everything should be merged, and when it should release given the release cadence ("Everything merged around 6 pm EST; release in tomorrow morning's window").
 4. **Open actions: K · Open decisions: N · Open tests: M**, the counts in those three workspaces (step 9), each followed by the open IDs ("Open decisions: 5 (OD005, OD016, OD021, OD027, OD031)"), plus one line on any answer that came back and what you did with it.
 5. **The workspace table:** one row per open workspace of this repo except this one and the three queues, from a fresh scan, with these columns:
    - **workspace**: its name
@@ -205,8 +205,11 @@ Everything else waits for the next digest: a PR opened, a merge, an archive, an 
    - **effort**: S, M, L or XL, how big its whole task is next to the project's other changes. Use the roadmap's own size if it has one; otherwise estimate it once from the change's tasks and keep it in the state file, so it doesn't drift between digests.
    - **progress**: what's done so far
    - **next step**: what has to happen to finish, in a few words ("rebase and merge", "archive PR", "waiting on your decision in that workspace")
+   - **ETA**: when it should be merged, as a duration and a time ("~2 h, around 4 pm EST"), or "on you" when it's waiting on the user
    - **babysitter monitoring?**: narrow, `x` for the ones you're babysitting
 6. The last line says when the next digest is due: "Next digest around <time>, if anything changes." (e.g. "around 7:45 pm EDT, if anything changes")
+
+**Estimates.** Whenever you say what's being worked on, say how long it should take. Base it on the effort column, the stage, and the pace you've seen in this run (how long similar steps took here: a test run, a PR's checks, an archive). Keep each estimate in the state file; when the next digest comes, don't move it quietly: say it slipped and why ("the e2e suite took twice as long as last time"). Round to what you know: "about 2 hours" beats "1 h 47 min". With no basis, say "no estimate yet" rather than invent one.
 
 **Plain words everywhere:** name each feature in words, not just its roadmap ID ("2.2b, the spam check"). Leave out test counts, file names, task numbers, CI job names and internal labels unless something failed or the user has to act on them; then say what it means for the user. The only codes are the queue IDs (OA001, OD001, OT001, step 9), and each comes with a few words on what it is.
 
