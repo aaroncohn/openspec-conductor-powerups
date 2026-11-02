@@ -6,7 +6,7 @@ A Claude Code plugin, `powerups`, with opinionated skills for people who use Ope
 
 - `.claude-plugin/plugin.json`: the plugin. `name` is `powerups`. No `version`, on purpose.
 - `.claude-plugin/marketplace.json`: the marketplace, `openspec-conductor-powerups`, with one plugin at `./`.
-- `skills/<name>/SKILL.md`: one skill each. `cloud.md` beside it holds the cloud steps. `skills/babysitter/conductor-local.py` holds babysitter's local, deterministic steps (scan, send, watch); `skills/babysitter/state.py` keeps its state file (IDs, workspace table, counts) and works locally and in the cloud.
+- `skills/<name>/SKILL.md`: one skill each. `cloud.md` beside it holds the cloud steps. `skills/babysitter/conductor-local.py` holds babysitter's local, deterministic steps (scan, send, watch); `skills/babysitter/state.py` keeps its state file (IDs, workspace table, counts) and works locally and in the cloud. `skills/doctor/doctor.py` is the read-only health check.
 
 ## Releases
 

@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 fail() { echo "✗ $1"; exit 1; }
 
 # 1. The scripts compile and their self-tests pass (each runs its asserts first).
-python3 -m py_compile skills/babysitter/conductor-local.py skills/babysitter/state.py
+python3 -m py_compile skills/babysitter/conductor-local.py skills/babysitter/state.py skills/doctor/doctor.py
 BABYSITTER_STATE="$(mktemp -d)/s.json" python3 skills/babysitter/state.py counts >/dev/null
 python3 -c 'import importlib.util as u, sys; s=u.spec_from_file_location("c","skills/babysitter/conductor-local.py"); m=u.module_from_spec(s); s.loader.exec_module(m); m.check_stage(); m.check_scan_changes()'
 echo "✓ scripts compile and self-tests pass"
@@ -35,7 +35,8 @@ python3 -c 'import json; json.load(open(".claude-plugin/plugin.json")); json.loa
 echo "✓ skills listed, manifests valid"
 
 # 4. Nothing project-specific leaked into the skills (CLAUDE.md: keep the skills generic).
-! grep -rniE 'nicesite|aaroncohn|@gmail' skills/ || fail "project-specific name in skills/"
+! grep -rniE --exclude-dir=__pycache__ 'nicesite|@gmail' skills/ || fail "project-specific name in skills/"
+! grep -rn --exclude-dir=__pycache__ 'aaroncohn' skills/ | grep -v 'aaroncohn/openspec-conductor-powerups' || fail "project-specific name in skills/ (the plugin's own repo URL is fine)"
 echo "✓ skills are generic"
 
 # 5. The plugin validates (three warnings expected: no version, no icon, CLAUDE.md not loaded).

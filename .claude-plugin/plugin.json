@@ -1,6 +1,6 @@
 {
   "name": "powerups",
-  "description": "Opinionated skills for running OpenSpec changes across parallel Conductor workspaces: start a batch, ship it, check where things stand, clean up, hand browser tasks to your own machine, and compare real options before a decision that matters.",
+  "description": "Opinionated skills for running OpenSpec changes across parallel Conductor workspaces: start a batch, ship it, check where things stand and that you're on the latest version, clean up, hand browser tasks to your own machine, and compare real options before a decision that matters.",
   "author": {
     "name": "Aaron Cohn",
     "url": "https://aaroncohn.com"
