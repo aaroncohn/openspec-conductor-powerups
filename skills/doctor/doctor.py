@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Check that powerups is current and that everything babysitter needs is in place. Read-only.
 
-  doctor.py            print a table: ✓ fine, ⚠ worth knowing, ⛔ needs a fix (with the fix)
+  doctor.py              print a table: ✓ fine, ⚠ worth knowing, ⛔ needs a fix (with the fix)
+  doctor.py --send-test  also send a message to this session through babysitter's local path and confirm it lands
 
 Local (CONDUCTOR_IS_LOCAL=1): also checks Conductor's database and the outbox table babysitter writes to.
 Cloud: also checks the conductor CLI's token and which cloud workspaces were created before the latest release.
@@ -12,6 +13,8 @@ REPO = "aaroncohn/openspec-conductor-powerups"
 PLUGIN = "powerups@openspec-conductor-powerups"
 OUTBOX = ["message_id", "session_id", "delivery_payload", "config", "mode", "asset_ids", "queue_order", "state",
           "send_attempt_count", "next_send_attempt_at", "created_at", "updated_at"]  # what conductor-local.py send writes
+# The columns matching only proves the table is there. Conductor 0.92 kept the table and stopped draining the
+# "queue" mode; --send-test is the check that catches that kind of change.
 QUEUES = ("Babysitter HQ", "Open Actions", "Open Decisions", "Open Tests")
 rows = []
 
@@ -123,6 +126,9 @@ def check_local():
         add("⛔", "outbox table", f"missing columns: {', '.join(missing)}", "a Conductor update changed the database: local messaging falls back to SendMessage; open an issue on the plugin")
     else:
         add("✓", "Conductor database and outbox table", "columns match what babysitter writes")
+    org = out(["python3", os.path.join(os.path.dirname(os.path.realpath(__file__)), "../babysitter/conductor-local.py"), "org"])
+    add("⛔" if org.startswith("cloud") else "✓" if org.startswith("local") else "⚠", "organization switcher", org.split(":")[0] or "unknown",
+        "switch Conductor's top-left switcher to the organization that shows this repo before new-batch-explore or babysitter open a Create dialog; on a cloud organization the dialog makes cloud workspaces on another repo" if not org.startswith("local") else "")
     root = os.path.dirname(out(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"]))
     names = [r[0] for r in con.execute(
         "select workspace_name from workspaces where repository_id = (select id from repos where root_path = ?) and state != 'archived'", (root,))]
@@ -160,12 +166,36 @@ def report_queues(names):
             "" if n == 1 else "babysitter creates it when it has an item" if n == 0 else "more than one: items will split across them; archive the empty one")
 
 
+def send_test(local):
+    # --send-test: the one check that proves local messaging works end to end: a message to this very session,
+    # through the same path babysitter uses. It shows in this chat as "Via Babysitter: doctor test".
+    if not local:
+        return add("⚠", "send test", "cloud: nothing to test", "cloud messaging uses the conductor CLI")
+    db = os.environ.get("CONDUCTOR_DB_PATH") or os.path.expanduser("~/Library/Application Support/com.conductor.app/conductor.db")
+    try:
+        sid = sqlite3.connect(f"file:{db}?mode=ro", uri=True).execute(
+            "select active_session_id from workspaces where workspace_path = ?", (os.path.realpath("."),)).fetchone()[0]
+    except (sqlite3.Error, TypeError):
+        return add("⛔", "send test", "can't find this workspace's session in Conductor's database", "run from a Conductor workspace")
+    script = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../babysitter/conductor-local.py")
+    msg = os.path.join(".context", "doctor-send-test.md")
+    os.makedirs(".context", exist_ok=True)
+    open(msg, "w").write("Via Babysitter: doctor test. Ignore this message; reply with nothing.")
+    r = subprocess.run(["python3", script, "send", sid, msg, "--now"], capture_output=True, text=True, timeout=400)
+    if r.returncode == 0:
+        add("✓", "send test", "delivered to this chat through Conductor's outbox")
+    else:
+        add("⛔", "send test", (r.stderr or r.stdout).strip()[:120], "a Conductor update changed messaging; babysitter falls back to SendMessage (invisible in chats). Open an issue on the plugin with this output")
+
+
 def main():
     local = os.environ.get("CONDUCTOR_IS_LOCAL", "1") != "0"
     latest_date = check_plugin(local)
     check_tools(local)
     check_repo_defaults()
     (check_local if local else lambda: check_cloud(latest_date))()
+    if "--send-test" in sys.argv:
+        send_test(local)
     print("| | check | found | fix |\n| --- | --- | --- | --- |")
     for mark, what, detail, fix in rows:
         print(f"| {mark} | {what} | {detail} | {fix} |")

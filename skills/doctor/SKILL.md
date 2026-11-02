@@ -11,10 +11,11 @@ Run it and show its table:
 python3 <this skill's dir>/doctor.py
 ```
 
-It prints one row per check: ✓ fine, ⚠ worth knowing, ⛔ needs a fix, with the fix in the last column. Below the table, in plain words:
+Add `--send-test` when the user asks whether babysitter's messages will show in the workspace chats, or after a Conductor update: it sends one message to this session through babysitter's local path and reports whether it landed (it shows up in this chat as "Via Babysitter: doctor test"; that's expected). It prints one row per check: ✓ fine, ⚠ worth knowing, ⛔ needs a fix, with the fix in the last column. Below the table, in plain words:
 
 - If any row is ⛔, say what to do first. "This session runs an older copy" means: start a new session in this workspace, nothing else. A version mismatch means: run the update line, then a new session.
 - In the cloud, workspaces "created before the latest release" are only a guess from dates: say so, and that only workspaces where the user types `/powerups:` commands need the install; queue and change workspaces are driven by messages and don't.
-- An outbox-table ⛔ means a Conductor update changed its database. Babysitter still works, falling back to Claude's `SendMessage` (messages won't show in the workspace chats). Suggest opening an issue on the plugin with the doctor output.
+- An "organization switcher" ⛔ means Conductor is on a cloud organization: the Create dialog that new-batch-explore and babysitter open would make cloud workspaces on another repo. The fix is the switcher at the top left of Conductor.
+- An outbox-table or send-test ⛔ means a Conductor update changed its database or messaging. Babysitter still works, falling back to Claude's `SendMessage` (messages won't show in the workspace chats). Suggest opening an issue on the plugin with the doctor output.
 
 Don't fix anything yourself; the fixes touch the user's Claude config and Conductor settings.
