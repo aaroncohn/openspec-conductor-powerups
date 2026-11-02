@@ -1,6 +1,6 @@
 ---
 name: babysitter
-description: Coordinate every other Conductor workspace of this repo whose OpenSpec change has been proposed, messaging their Claude sessions directly and keeping them moving until each change is built, tested, merged into main with green CI and archived, then promote main to production. Answers their questions on the user's behalf, and sends decisions to revisit, tests only the user can do, and actions only the user can do (secrets, accounts, payment details) to separate Open Decisions, Open Tests and Open Actions workspaces, which present them one at a time. Works in local and cloud Conductor workspaces. Run with /babysitter, optionally followed by the workspaces or milestones to cover, and --auto-prod or --stop-after merged|dev.
+description: Coordinate every other Conductor workspace of this repo whose OpenSpec change has been proposed, messaging their Claude sessions directly and keeping them moving until each change is built, tested, merged into main with green CI and archived, then promote main to production. Answers their questions on the user's behalf, and sends decisions to revisit, tests only the user can do, and actions only the user can do (secrets, accounts, payment details) to separate Open Decisions, Open Tests and Open Actions workspaces, which present them one at a time. Works in local and cloud Conductor workspaces. Run with /babysitter, optionally followed by the workspaces or milestones to cover, --mode cautious|standard|fast|hyperspeed, --auto-prod or --stop-after merged|dev.
 disable-model-invocation: true
 ---
 
@@ -28,9 +28,22 @@ By default the babysitter goes all the way to production, but asks once first: b
 - How often to post digests (step 6), in plain words, e.g. "update me every 30 minutes". The default is about every hour.
 - How often to release (step 7), in plain words, e.g. "release whenever something's ready" or "once a day". The default is at most twice a day.
 
-**Repo defaults.** A `## babysitter` section in the project's `AGENTS.md`/`CLAUDE.md` can set these for every run (e.g. `stop after: dev`, `release: once a day`, `digests: every 30 minutes`, `Timezone: America/New_York`). The user's flags and words for this run win over it.
+**Repo defaults.** A `## babysitter` section in the project's `AGENTS.md`/`CLAUDE.md` can set these for every run (e.g. `mode: fast`, `stop after: dev`, `release: once a day`, `digests: every 30 minutes`, `Timezone: America/New_York`). The user's flags and words for this run win over it.
 
-Record the chosen options in the state file and apply them to the goal, the "Done means" list, and the final report.
+### Mode
+
+The mode says how much the babysitter does on its own. Four, from careful to all-in:
+
+| Mode | What's blocking (waits for the user) | Merges | Production | "Go" for sessions (step 4) | Releases | Stuck session |
+| --- | --- | --- | --- | --- | --- | --- |
+| **cautious** | everything in "Blocking or batch", plus every merge to `main` and every decision that's hard to reverse | asks first | asks first | no: the user gives it | at most once a day | prod it, then tell the user |
+| **standard** (default) | as written in "Blocking or batch" | on its own | asks once | yes | at most twice a day | prod it, then `⚠️ STOPPED` |
+| **fast** | money, security or privacy, data loss, migrations | on its own | without asking (`--auto-prod`) | yes | whenever something's ready | prod it, then `⚠️ STOPPED` |
+| **hyperspeed** | money, security or privacy, irreversible data loss; everything else is decided and logged to Open Decisions | on its own | without asking | yes | whenever something's ready; `/safe-to-archive` and the archive PRs run alongside the release, not before it | take over right away (Rules), no prod first |
+
+A flaky CI job on `main` is re-run once without asking in every mode (step 7.1). Pick the mode this way, in order: `--mode <name>` or plain words after `/babysitter` ("go fast", "be careful") for this run; else `mode:` in the repo's `## babysitter` section; else ask, once, the first time babysitter runs in this repo, in its own short message that explains the four modes in two lines each (what it decides alone, what it asks you about), recommends **standard**, and asks which to use. When they answer, suggest adding `mode: <name>` to the `## babysitter` section so the next run doesn't ask. Until they answer, run as **standard**. Explicit flags (`--auto-prod`, `--stop-after`, a release cadence) win over what the mode implies.
+
+Record the mode and the other options in the state file and apply them to the goal, the "Done means" list, and the final report. Name the mode in the first message and the final report.
 
 ## Done means
 

@@ -110,7 +110,17 @@ To keep a hand on the release, add an option (a flag or plain words both work):
 | `/babysitter --stop-after dev` | after full CI on `main` and the dev deploy are green; you release to production |
 | `/babysitter --stop-after merged` | once every change is merged and archived; no CI run on `main`, no deploys |
 
-You can also name the workspaces or milestones to cover: `/babysitter 2.1 2.3 --auto-prod`, and set the pace in plain words ("release once a day", "update me every 30 minutes"). By default it releases at most twice a day, even when you add workspaces mid-run. A `## babysitter` section in your `AGENTS.md`/`CLAUDE.md` can hold these defaults for every run (`stop after: dev`, `release: once a day`, `Timezone: America/New_York`).
+You can also name the workspaces or milestones to cover: `/babysitter 2.1 2.3 --auto-prod`, and set the pace in plain words ("release once a day", "update me every 30 minutes"). By default it releases at most twice a day, even when you add workspaces mid-run. A `## babysitter` section in your `AGENTS.md`/`CLAUDE.md` can hold these defaults for every run (`mode: fast`, `stop after: dev`, `release: once a day`, `Timezone: America/New_York`).
+
+**Mode.** The first time babysitter runs in a repo it asks how much to do on its own, and offers to save the answer to your `## babysitter` section. Pass `--mode <name>` to set it for one run.
+
+| Mode | It decides alone | It asks you about | Releases |
+| --- | --- | --- | --- |
+| `cautious` | small, easily reversed choices | every merge to `main`, production, anything hard to reverse | once a day at most |
+| `standard` (default) | everything except scope, data model and migrations, money, security and privacy, things users see that are hard to change | those, plus production (once) | twice a day at most |
+| `fast` | everything except money, security and privacy, data loss, migrations | those; production goes out without asking | whenever something's ready |
+| `hyperspeed` | everything except money, security and privacy, irreversible data loss; it logs every call to Open Decisions | those only | whenever something's ready; wrap-up runs alongside the release |
+
 
 ### What you'll see
 
