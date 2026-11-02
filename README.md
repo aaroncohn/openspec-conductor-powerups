@@ -8,6 +8,7 @@ Conductor lets you run many coding agents side by side, each in its own workspac
 | --- | --- |
 | **new-batch-explore** | Reads your roadmap, picks the next 2–5 milestones that can be built in parallel without colliding, and opens a Conductor workspace for each one, already in `/opsx:explore`. |
 | **babysitter** | After you've explored and proposed in several workspaces, run this in one more workspace. It messages each workspace's Claude session, answers their questions for you, and keeps them moving until every change is tested, merged, archived, and released to production. If `safe-to-archive` is installed, each workspace runs it last. Then it walks you through the decisions it made, one at a time with a recommendation, and the things only you can test, one at a time with full steps and a shortcut (a prompt for your browser agent, or an offer to do most of it). Every item has an ID (`OA001`, `OD001`, `OT001`…) that stays the same everywhere. |
+| **status-check** | Where things stand, from wherever you run it. In Babysitter HQ, a full digest with the table. In an Open Actions, Decisions or Tests workspace, how many items are open, by ID with a line each. In any other workspace, its stage, PR and checks, and what's left before merge. |
 | **safe-to-archive** | Checks whether a workspace can be archived without losing anything: uncommitted or unpushed work, open PRs, stashes, unarchived OpenSpec changes, files that only exist in this workspace, running processes. Read-only. |
 | **browser-handoff** | For cloud workspaces: when an agent needs something done in your real browser (a dashboard setting, a secret pasted into a web UI), it writes one self-contained task block, with the exact account and your project's rules, for you to paste into a local `claude --chrome` session. |
 | **better-decision** | Before a choice that matters, stops and lays out at least four real options, each with pros, cons, how hard it is to undo, and a rating, then recommends one and waits for your pick. In an OpenSpec change, it records the pick in `design.md`. Use it anytime, in any workspace. |
@@ -18,6 +19,7 @@ Conductor lets you run many coding agents side by side, each in its own workspac
 /new-batch-explore          → N new workspaces, each exploring one milestone
 /opsx:explore, /opsx:propose  in each workspace (that's you, thinking with Claude)
 /babysitter                 → apply, test, merge, archive, release (hands off)
+/status-check               in any workspace → where things stand
 /safe-to-archive            in each workspace (babysitter runs it for you) → archive it in Conductor
 ```
 
@@ -75,6 +77,7 @@ Each skill works with the workspaces of its own kind: run from a local workspace
 | **Setup** | None. | The `conductor` CLI needs an API token. Turn on automatic API access in Conductor → Settings → General before creating the workspaces (it only applies to new ones), or set `CONDUCTOR_API_KEY`. |
 | **new-batch-explore** | Opens Conductor's Create dialog for each workspace; you press Enter once per workspace. Then it names each one `m{id}-{name}` in Conductor's database (backed up first). | Creates and names the workspaces itself, with no clicks, and gives you a link to each. |
 | **babysitter** | Messages appear in each workspace's chat, starting with "Via Babysitter:". They go through Conductor's database (backed up first; falls back to Claude Code's `SendMessage` if that stops working). Keep the Conductor app open and the Mac awake. Sessions can use your browser and its logins. | Messages appear in each workspace's chat through the `conductor` CLI. Sessions run in Linux sandboxes, so anything that needs your Mac (your browser and its logins, local files) comes to you as a handoff. |
+| **status-check** | Same everywhere: it reads this chat, the state file, `gh` and `openspec`. | Same. |
 | **safe-to-archive** | Checks this workspace's branch. Other local branches live in the shared repository and survive archiving. | Archiving deletes the whole sandbox, so it checks every branch in it, plus any running cloud browser session. |
 
 ## Requirements and assumptions
