@@ -52,13 +52,13 @@ The skills are then `/powerups:babysitter`, `/powerups:new-batch-explore`, and s
 
 Without auto-update, run `/plugin marketplace update openspec-conductor-powerups`.
 
-**For cloud workspaces**, a cloud sandbox can't see your Mac's plugins, so install the plugin when each workspace is created. Add the `extraKnownMarketplaces` and `enabledPlugins` entries above to your repo's `.claude/settings.json`, and add this to your Conductor setup script:
+**For cloud workspaces**, a cloud sandbox can't see your Mac's plugins, so install the plugin when each workspace is created. Add the `extraKnownMarketplaces` and `enabledPlugins` entries above to your repo's `.claude/settings.json`, and put this in the repository's **Setup script in your organization's cloud settings** (Conductor: switch to the cloud organization at the top left, open the Cloud Computer / organization settings, the repository, Setup script):
 
 ```bash
 claude plugin marketplace add aaroncohn/openspec-conductor-powerups --scope project && claude plugin install powerups@openspec-conductor-powerups --scope project
 ```
 
-Every new workspace then gets the latest version.
+Cloud workspaces don't run the `[scripts] setup` in `.conductor/settings.toml`; that one is local-only ([Conductor's docs](https://www.conductor.build/docs/cloud/environment-variables): "Cloud workspaces run the repository's Setup script from organization settings"). A `SessionStart` hook that runs the same install is a good backup, but it lands after the first session's command list is built: in that session `/powerups:` won't show in the picker until you start a second session. Every new workspace then gets the latest version.
 
 If you'd rather have short names (`/babysitter`) and update by hand, copy the folders into `~/.claude/skills/` (or your repo's `.claude/skills/` for cloud workspaces) instead:
 
@@ -75,7 +75,7 @@ Each skill works with the workspaces of its own kind: run from a local workspace
 
 | | Local (Conductor on your Mac) | Cloud (Conductor cloud workspaces) |
 | --- | --- | --- |
-| **Install** | The plugin, with auto-update on (see [Install](#install)). | The plugin, installed by your Conductor setup script from the repo's `.claude/settings.json` (see [Install](#install)): a cloud sandbox can't see your Mac's plugins. |
+| **Install** | The plugin, with auto-update on (see [Install](#install)). | The plugin, installed by the repository's Setup script in your organization's cloud settings, from the repo's `.claude/settings.json` (see [Install](#install)): a cloud sandbox can't see your Mac's plugins, and `.conductor/settings.toml`'s setup is local-only. |
 | **Setup** | None. | The `conductor` CLI needs an API token. Turn on automatic API access in Conductor → Settings → General before creating the workspaces (it only applies to new ones), or set `CONDUCTOR_API_KEY`. |
 | **new-batch-explore** | Opens Conductor's Create dialog for each workspace; you press Enter once per workspace, after checking it says Local and your repo (the dialog follows the organization switcher, not the link). Then it names each one `m{id}-{name}` in Conductor's database (backed up first). | Creates and names the workspaces itself, with no clicks, and gives you a link to each. |
 | **babysitter** | Messages appear in each workspace's chat, starting with "Via Babysitter:". They go through Conductor's database (backed up first; falls back to Claude Code's `SendMessage` if that stops working; `/doctor --send-test` tells you which). Keep the Conductor app open and the Mac awake, and the organization switcher (top left) on the organization that shows this repo, or the Create dialogs for the queue workspaces make cloud workspaces on another repo. Sessions can use your browser and its logins. | Messages appear in each workspace's chat through the `conductor` CLI. Sessions run in Linux sandboxes, so anything that needs your Mac (your browser and its logins, local files) comes to you as a handoff. |

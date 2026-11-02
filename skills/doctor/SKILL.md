@@ -16,6 +16,7 @@ Add `--send-test` when the user asks whether babysitter's messages will show in 
 - If any row is ⛔, say what to do first. "This session runs an older copy" means: start a new session in this workspace, nothing else. A version mismatch means: run the update line, then a new session.
 - In the cloud, workspaces "created before the latest release" are only a guess from dates: say so, and that only workspaces where the user types `/powerups:` commands need the install; queue and change workspaces are driven by messages and don't.
 - An "organization switcher" ⛔ means Conductor is on a cloud organization: the Create dialog that new-batch-explore and babysitter open would make cloud workspaces on another repo. The fix is the switcher at the top left of Conductor.
+- An "installed after this workspace was created" ⛔ (cloud) means the organization's Setup script for this repository doesn't install the plugin; a hook did it mid-session. First sessions in new workspaces won't show `/powerups:` until the user adds the install line to that Setup script (Conductor's cloud organization settings, not `.conductor/settings.toml`). Meanwhile: start a second session.
 - An outbox-table or send-test ⛔ means a Conductor update changed its database or messaging. Babysitter still works, falling back to Claude's `SendMessage` (messages won't show in the workspace chats). Suggest opening an issue on the plugin with the doctor output.
 
 Don't fix anything yourself; the fixes touch the user's Claude config and Conductor settings.

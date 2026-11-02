@@ -44,7 +44,7 @@ def plugin_versions():
     except (OSError, ValueError):
         installs = []
     return [(i.get("scope", "?"), short(i.get("gitCommitSha") or i.get("version")), i.get("lastUpdated", "")[:16],
-             i.get("projectPath", "")) for i in installs]
+             i.get("projectPath", ""), i.get("installedAt", "")) for i in installs]
 
 
 def running_version():
@@ -67,7 +67,7 @@ def check_plugin(local):
     if not installed:
         add("⛔", "powerups installed", "not in installed_plugins.json",
             "claude plugin marketplace add %s && claude plugin install %s" % (REPO, PLUGIN) + (" --scope project" if not local else ""))
-    for scope, sha, updated, project in installed:
+    for scope, sha, updated, project, _ in installed:
         where = f"{scope} scope" + (f" ({os.path.basename(project)})" if project else "")
         if latest and sha and not latest.startswith(sha) and not sha.startswith(latest):
             add("⛔", f"powerups {where}", f"{sha}, latest is {latest}",
@@ -75,7 +75,7 @@ def check_plugin(local):
                 + (f" --scope {scope}" if scope != "user" else ""))
         else:
             add("✓", f"powerups {where}", f"{sha}, updated {updated.replace('T', ' ')}")
-    current = any(sha.startswith(running) or running.startswith(sha) for _, sha, _, _ in installed if sha)
+    current = any(sha.startswith(running) or running.startswith(sha) for _, sha, _, _, _ in installed if sha)
     if running.startswith("a checkout"):
         add("⚠", "this session runs", running, "fine for working on the plugin; users run the installed one")
     elif installed and not current:
@@ -145,6 +145,11 @@ def check_cloud(latest_date):
     except ValueError:
         return add("⛔", "conductor CLI", "output isn't JSON", "run: conductor workspace list --mine --json")
     add("✓", "conductor CLI", f"{len(data)} open workspaces of {repo}")
+    me = next((w for w in data if w.get("id") == os.environ.get("CONDUCTOR_WORKSPACE_ID")), None)
+    installed_at = max((i[4] for i in plugin_versions()), default="")
+    if me and installed_at and installed_at > (me.get("createdAt") or "") and (me.get("createdAt") or ""):
+        add("⛔", "installed after this workspace was created", f"workspace {me['createdAt'][:16]}, plugin {installed_at[:16]}",
+            "the cloud Setup script didn't install the plugin, so a workspace's first session doesn't see it (a SessionStart hook installed it later). Put the install line in the repository's Setup script in your organization's cloud settings; .conductor/settings.toml's setup is local-only. Until then, start a second session in each new workspace")
     report_queues([w.get("name", "") for w in data])
     if latest_date:
         stale = [w.get("name", "?") for w in data if (w.get("createdAt") or w.get("created_at") or "") < latest_date
