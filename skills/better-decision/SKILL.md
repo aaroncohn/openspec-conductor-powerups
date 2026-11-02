@@ -1,6 +1,6 @@
 ---
 name: better-decision
-description: Stop before a decision that matters, research it, and lay out at least four real options side by side, each with pros, cons, how hard it is to undo, and a 1–10 rating, then recommend one and wait for the user to pick. When there's an OpenSpec change in progress, record the pick in it. Run with /better-decision, optionally followed by what to decide (e.g. /better-decision how we cache sessions).
+description: Stop before a decision that matters, research it, and lay out at least four real options side by side, each with pros, cons, how hard it is to undo, and a 1–10 rating, then recommend one and wait for the user to pick. When there's an OpenSpec change in progress, record the pick in it. Run with `/babysitter:better-decision`, optionally followed by what to decide (e.g. `/babysitter:better-decision` how we cache sessions).
 disable-model-invocation: true
 ---
 
@@ -12,7 +12,7 @@ The output is a decision the user makes with what they need in front of them. Ev
 
 ## 1. Pin down the decision
 
-From the conversation, plus anything typed after `/better-decision`, work out:
+From the conversation, plus anything typed after `/babysitter:better-decision`, work out:
 
 - **The decision**, as one concrete fork ("store drafts in Postgres or in the browser"), not a broad area ("storage").
 - **What a good answer has to do:** two to four criteria from what's already been said (speed, cost, a deadline, a constraint the user named, a rule in the repo). These are what the ratings measure against.

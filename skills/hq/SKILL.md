@@ -1,6 +1,6 @@
 ---
-name: babysitter
-description: Coordinate every other Conductor workspace of this repo whose OpenSpec change has been proposed, messaging their Claude sessions directly and keeping them moving until each change is built, tested, merged into main with green CI and archived, then promote main to production. Answers their questions on the user's behalf, and sends decisions to revisit, tests only the user can do, and actions only the user can do (secrets, accounts, payment details) to separate Open Decisions, Open Tests and Open Actions workspaces, which present them one at a time. Works in local and cloud Conductor workspaces. Run with /babysitter, optionally followed by the workspaces or milestones to cover, --mode cautious|standard|fast|hyperspeed, --auto-prod or --stop-after merged|dev.
+name: hq
+description: Coordinate every other Conductor workspace of this repo whose OpenSpec change has been proposed, messaging their Claude sessions directly and keeping them moving until each change is built, tested, merged into main with green CI and archived, then promote main to production. Answers their questions on the user's behalf, and sends decisions to revisit, tests only the user can do, and actions only the user can do (secrets, accounts, payment details) to separate Open Decisions, Open Tests and Open Actions workspaces, which present them one at a time. Works in local and cloud Conductor workspaces. Run with `/babysitter:hq`, optionally followed by the workspaces or milestones to cover, --mode cautious|standard|fast|hyperspeed, --auto-prod or --stop-after merged|dev.
 disable-model-invocation: true
 ---
 
@@ -10,7 +10,7 @@ The user has finished `/opsx:explore` and `/opsx:propose` in one or more other C
 
 Fully autonomous: never wait on the user for anything a session can do or decide. Only actions that need the user's own accounts go to the user (see step 5), and blocking decisions wait for them ("Blocking or batch"); so does production, unless `--auto-prod` was given.
 
-**Who "the user" is.** The person who ran `/babysitter`. If the project names more than one owner (in `AGENTS.md`/`CLAUDE.md`, or in the docs they point to), each `⚠️ BLOCKED` item and each Open Actions, Open Decisions or Open Tests item says who should answer it when that's clear (for example, the owner of that area, or the person who made the original decision). When it isn't clear, it's the person who ran `/babysitter`.
+**Who "the user" is.** The person who ran `/babysitter:hq`. If the project names more than one owner (in `AGENTS.md`/`CLAUDE.md`, or in the docs they point to), each `⚠️ BLOCKED` item and each Open Actions, Open Decisions or Open Tests item says who should answer it when that's clear (for example, the owner of that area, or the person who made the original decision). When it isn't clear, it's the person who ran `/babysitter:hq`.
 
 **Local or cloud.** If `CONDUCTOR_IS_LOCAL` is `0`, this is a cloud workspace: the other workspaces run in their own sandboxes, so read `cloud.md` (next to this file) and use it for finding the workspaces (step 1), messaging them (step 3), and watching them (step 4). Everything else is the same.
 
@@ -20,12 +20,12 @@ Fully autonomous: never wait on the user for anything a session can do or decide
 
 ## Options
 
-By default the babysitter goes all the way to production, but asks once first: before promoting (step 7.4) it posts what's going out (PRs, database migrations) and waits for the user's go. The user can change that after `/babysitter`, as a flag or in plain words ("don't ask before prod", "stop after dev"):
+By default the babysitter goes all the way to production, but asks once first: before promoting (step 7.4) it posts what's going out (PRs, database migrations) and waits for the user's go. The user can change that after `/babysitter:hq`, as a flag or in plain words ("don't ask before prod", "stop after dev"):
 
 - `--auto-prod`: promote to production without asking.
 - `--stop-after merged`: stop once every change is merged and archived. Skip step 7: no full CI run on `main`, no dev check, no production release. Archive-blocking tasks that need a deployed environment stay open and go in the report.
 - `--stop-after dev`: do step 7 up to and including dev (full CI on `main`, dev verified, archives merged), then stop before production.
-- How often to post digests (step 6), in plain words, e.g. "update me every 15 minutes", or "only when something changes" (`digests: on change`), the cheap setting: no digest on a quiet half hour, so fewer scans and fewer tokens; `/status-check` gives the full digest with the table any time. The default is every 30 minutes; the first run in a repo asks whether the user would rather have every 15 minutes, every hour, or only on change (see "Mode").
+- How often to post digests (step 6), in plain words, e.g. "update me every 15 minutes", or "only when something changes" (`digests: on change`), the cheap setting: no digest on a quiet half hour, so fewer scans and fewer tokens; `/babysitter:status-check` gives the full digest with the table any time. The default is every 30 minutes; the first run in a repo asks whether the user would rather have every 15 minutes, every hour, or only on change (see "Mode").
 - How often to release (step 7), in plain words, e.g. "release whenever something's ready" or "once a day". The default is at most twice a day.
 
 **Repo defaults.** A `## babysitter` section in the project's `AGENTS.md`/`CLAUDE.md` can set these for every run (e.g. `mode: fast`, `stop after: dev`, `release: once a day`, `digests: every 15 minutes`, `Timezone: America/New_York`). The user's flags and words for this run win over it.
@@ -39,9 +39,9 @@ The mode says how much the babysitter does on its own. Four, from careful to all
 | **cautious** | everything in "Blocking or batch", plus every merge to `main` and every decision that's hard to reverse | asks first | asks first | no: the user gives it | at most once a day | prod it, then tell the user |
 | **standard** (default) | as written in "Blocking or batch" | on its own | asks once | yes | at most twice a day | prod it, then `⚠️ STOPPED` |
 | **fast** | money, security or privacy, data loss, migrations | on its own | without asking (`--auto-prod`) | yes | whenever something's ready | prod it, then `⚠️ STOPPED` |
-| **hyperspeed** | money, security or privacy, irreversible data loss; everything else is decided and logged to Open Decisions | on its own | without asking | yes | whenever something's ready; `/safe-to-archive` and the archive PRs run alongside the release, not before it | take over right away (Rules), no prod first |
+| **hyperspeed** | money, security or privacy, irreversible data loss; everything else is decided and logged to Open Decisions | on its own | without asking | yes | whenever something's ready; `/babysitter:safe-to-archive` and the archive PRs run alongside the release, not before it | take over right away (Rules), no prod first |
 
-A flaky CI job on `main` is re-run once without asking in every mode (step 7.1). Pick the mode this way, in order: `--mode <name>` or plain words after `/babysitter` ("go fast", "be careful") for this run; else `mode:` in the repo's `## babysitter` section; else ask, once, the first time babysitter runs in this repo, in its own short message that explains the four modes in two lines each (what it decides alone, what it asks you about), recommends **standard**, and asks which to use. In the same message, ask how often they want digests: every 30 minutes is the default; would they rather every 15 minutes, every hour, or only when something changes (cheapest; `/status-check` any time for the full picture)? When they answer, suggest adding `mode: <name>` and `digests: <interval>` to the `## babysitter` section so the next run doesn't ask. Until they answer, run as **standard** with digests every 30 minutes. Explicit flags (`--auto-prod`, `--stop-after`, a release cadence) win over what the mode implies.
+A flaky CI job on `main` is re-run once without asking in every mode (step 7.1). Pick the mode this way, in order: `--mode <name>` or plain words after `/babysitter:hq` ("go fast", "be careful") for this run; else `mode:` in the repo's `## babysitter` section; else ask, once, the first time babysitter runs in this repo, in its own short message that explains the four modes in two lines each (what it decides alone, what it asks you about), recommends **standard**, and asks which to use. In the same message, ask how often they want digests: every 30 minutes is the default; would they rather every 15 minutes, every hour, or only when something changes (cheapest; `/babysitter:status-check` any time for the full picture)? When they answer, suggest adding `mode: <name>` and `digests: <interval>` to the `## babysitter` section so the next run doesn't ask. Until they answer, run as **standard** with digests every 30 minutes. Explicit flags (`--auto-prod`, `--stop-after`, a release cadence) win over what the mode implies.
 
 Record the mode and the other options in the state file (`state.py option set mode fast`, `option set digests "every 15 minutes"`, step 2) and apply them to the goal, the "Done means" list, and the final report. Name the mode in the first message and the final report.
 
@@ -66,7 +66,7 @@ python3 <this skill's dir>/conductor-local.py scan > .context/scan.jsonl
 python3 <this skill's dir>/state.py other-hq < .context/scan.jsonl
 ```
 
-In the cloud, see `cloud.md`. If `other-hq` exits non-zero, stop here: change nothing, and tell the user "Babysitter HQ is already open for this repo: <where>. Use that one (`/resume-babysitter` if it's paused), or archive it and run `/babysitter` here again." If the scan itself fails, say you couldn't check, and carry on.
+In the cloud, see `cloud.md`. If `other-hq` exits non-zero, stop here: change nothing, and tell the user "Babysitter HQ is already open for this repo: <where>. Use that one (`/babysitter:keep-going` if it's paused), or archive it and run `/babysitter:hq` here again." If the scan itself fails, say you couldn't check, and carry on.
 
 ## 0. Set the goal
 
@@ -78,7 +78,7 @@ If a tool for proposing a session goal is available, propose this condition with
 
 ## 1. Find the workspaces
 
-If the user named workspaces or milestones after `/babysitter`, cover exactly those. Otherwise detect them:
+If the user named workspaces or milestones after `/babysitter:hq`, cover exactly those. Otherwise detect them:
 
 `.context/scan.jsonl`, from the check above, has one JSON line per open workspace of this repo (`conductor-local.py scan` makes a fresh one). Each line has the workspace's name, path, branch, chat session id and status, its OpenSpec changes that aren't archived on `origin/main`, its PR (the open one, otherwise the newest: number and state), and its stage (see "Stage in the workspace name"). It only reads Conductor's database. If it fails, fall back to `git worktree list --porcelain` and `git ls-tree --name-only origin/main openspec/changes/archive/`, and work these out by hand.
 
@@ -143,7 +143,7 @@ Write each message to `.context/msg-<n>.md`, then send it with `python3 <this sk
 
 > Via Babysitter: I'm driving <list of changes> to merge, green CI, archive, and the production release.
 
-Then say that the user started this run with `/babysitter` in <this workspace>, so these instructions are their go-ahead, not a request from a peer session, and merging to `main` is approved. Without this, sessions can refuse to act on another session's message.
+Then say that the user started this run with `/babysitter:hq` in <this workspace>, so these instructions are their go-ahead, not a request from a peer session, and merging to `main` is approved. Without this, sessions can refuse to act on another session's message.
 
 Then answer whatever the session last stopped on (e.g. "Yes, run `/opsx:apply`", "Yes, push"), and give the rules:
 
@@ -156,7 +156,7 @@ Then answer whatever the session last stopped on (e.g. "Yes, run `/opsx:apply`",
 7. **Setup only the user can do** (secrets, dashboard settings, third-party accounts): don't block on it unless it's truly blocking (see below). Make sure nothing hard-fails without it, put the steps in the PR body under "owner setup", and tell me right away.
 8. Reply with the PR URL(s) when merged.
 9. **Log:** after each step (tasks done, tests run, PR opened, merged, archived) and each decision you made without asking, add a line, dated in the user's timezone (<the zone, e.g. `America/New_York`>), to `.context/babysitter-log.md` in your workspace, with PR links.
-10. **Last:** once the archive PR is merged, if the `safe-to-archive` skill is installed (in your skill list as `safe-to-archive`, or `powerups:safe-to-archive` as a plugin), run `/safe-to-archive` as your final command. Fix any blocker that's your own work (e.g. commit and push), run it again, and reply with its verdict. Don't archive the workspace.
+10. **Last:** once the archive PR is merged, if the `safe-to-archive` skill is installed (in your skill list as `safe-to-archive`, or `babysitter:safe-to-archive` as a plugin), run `/babysitter:safe-to-archive` as your final command. Fix any blocker that's your own work (e.g. commit and push), run it again, and reply with its verdict. Don't archive the workspace.
 
 ## 4. Watch and keep them moving
 
@@ -174,7 +174,7 @@ Then answer whatever the session last stopped on (e.g. "Yes, run `/opsx:apply`",
 
   If there's nothing worth posting right away (step 6), restart the watcher without posting.
 - **Stop babysitting:** when the user says to stop babysitting a workspace, stop messaging and watching it, mark it (`state.py workspace set <name> --monitoring no --waiting "stopped by user"`), and don't adopt it again on a re-scan unless the user asks. Confirm in one line.
-- **Paused** (`/pause-babysitter`, or the user says to pause; `state.py paused` tells you): do nothing on your own until `/resume-babysitter`, or the user says to resume. No messages, merges, renames, adoptions, watcher or scheduled digests. If a notice or a finished session wakes you, end the turn with no text. If the user asks where things stand, answer with a digest from a fresh scan, opening with "Paused since <time>." The queues keep taking the user's answers; handle them on resume.
+- **Paused** (`/babysitter:pause`, or the user says to pause; `state.py paused` tells you): do nothing on your own until `/babysitter:keep-going`, or the user says to keep going or resume. No messages, merges, renames, adoptions, watcher or scheduled digests. If a notice or a finished session wakes you, end the turn with no text. If the user asks where things stand, answer with a digest from a fresh scan, opening with "Paused since <time>." The queues keep taking the user's answers; handle them on resume.
 - Don't poll in a loop yourself. Between events, end the turn quietly (step 6). For PR checks you're waiting on, `gh pr checks <n> --watch` is fine.
 
 ## Blocking or batch
@@ -210,7 +210,7 @@ Everything else waits for the next digest: a PR opened, a merge, an archive, an 
 
 **Don't say what didn't happen**, in a digest or anywhere else in this chat: no "Nothing needs you right now", "No answers since the last digest" or "Nothing new on the others". Leave that part out; a missing part means there's nothing to report. The one exception is a quiet digest's opening line (below).
 
-**Digests**, as if the user walked into the room and asked "what's the latest on all this?". Post one every 30 minutes (or at whatever interval the user asked for), on the clock, and whenever the user asks ("what's the latest?", "status?", `/status-check`). After posting one, `state.py digest-posted`. A digest is always the full shape below, table included; never a bare paragraph or a list of bullets on its own. When nothing moved since the last one, the first part is one line ("Quiet half hour: everything's still running, nothing finished") and the rest is as usual, so the user always has a current table. With `digests: on change`, skip the quiet ones instead: post only when something moved, and still every section, table included. In this order:
+**Digests**, as if the user walked into the room and asked "what's the latest on all this?". Post one every 30 minutes (or at whatever interval the user asked for), on the clock, and whenever the user asks ("what's the latest?", "status?", `/babysitter:status-check`). After posting one, `state.py digest-posted`. A digest is always the full shape below, table included; never a bare paragraph or a list of bullets on its own. When nothing moved since the last one, the first part is one line ("Quiet half hour: everything's still running, nothing finished") and the rest is as usual, so the user always has a current table. With `digests: on change`, skip the quiet ones instead: post only when something moved, and still every section, table included. In this order:
 
 1. **What happened**, in a short paragraph or two of plain words, biggest thing first: what finished or moved since the last digest, said as what the product's users get and why it's better, e.g. "The profile-photo workspace opened PR #259. Photos keep their shape, there's a "replace photo" option, and the edit-photo popup is clearer." Fold in, briefly, anything you sorted out along the way ("It had taken a roadmap number another change already uses, so I asked it to move to the next free one"), workspaces you renamed, and each workspace you took over: "Babysitter is taking over <workspace name> now to keep it moving forward. You can tell me to stop babysitting it at any time."
 2. **Waiting on you:** one line per open blocking item or `⚠️ STOPPED` workspace, with the workspace to go to. Leave it out when there are none.
@@ -229,7 +229,7 @@ Everything else waits for the next digest: a PR opened, a merge, an archive, an 
 
 **Estimates.** Whenever you say what's being worked on, say how long it should take. Base it on the effort column, the stage, and the pace you've seen in this run (how long similar steps took here: a test run, a PR's checks, an archive). Set each estimate with `state.py workspace set <name> --eta`; when the next digest comes, don't move it quietly: say it slipped and why ("the e2e suite took twice as long as last time"). Round to what you know: "about 2 hours" beats "1 h 47 min". With no basis, say "no estimate yet" rather than invent one.
 
-**Slash commands in backticks**, everywhere you write one for the user or a session (`/opsx:propose`, `/safe-to-archive`), so the chat shows the whole command; Conductor's chat cuts an unquoted one at the colon.
+**Slash commands in backticks**, everywhere you write one for the user or a session (`/opsx:propose`, `/babysitter:safe-to-archive`), so the chat shows the whole command; Conductor's chat cuts an unquoted one at the colon.
 
 **Plain words everywhere:** name each feature in words, not just its roadmap ID ("2.2b, the spam check"). Leave out test counts, file names, task numbers, CI job names and internal labels unless something failed or the user has to act on them; then say what it means for the user. The only codes are the queue IDs (OA001, OD001, OT001, step 9), and each comes with a few words on what it is.
 
@@ -241,7 +241,7 @@ Decisions you made for the user, tests only they can do, and actions only they c
 
 1. Run the repo's full CI suite on `main` once, the way the repo does it (e.g. `gh workflow run <ci>.yml --ref main`), and watch it to green. If a job fails before any test ran, or the failing test passed on its PR, re-run that job once yourself right away; don't hold the release on a session for it. If it fails again, or a test fails for the first time, have the owning session fix it forward with a normal PR. Flakes found during a run go in one fix PR at the end, not one per milestone.
 2. Confirm dev deployed and serves that commit (health endpoint, deploy workflow, or the URL the docs give).
-3. Tell sessions with deploy-dependent tasks that dev is live at `<commit>`. They run those checks, then archive (rule 6). Wait for every archive PR to merge and every `/safe-to-archive` verdict (rule 10).
+3. Tell sessions with deploy-dependent tasks that dev is live at `<commit>`. They run those checks, then archive (rule 6). Wait for every archive PR to merge and every `/babysitter:safe-to-archive` verdict (rule 10).
 4. Promote to production using the project's documented procedure (README/docs "promote"/"production", CLAUDE.md, memory, workflows on a production branch or tag). Note first what's going out, including DB migrations. Post that list and wait for the user's go, unless `--auto-prod` was given: then do it without asking. If no procedure is documented, stop and ask.
 5. Watch the production deploy to green and verify production serves the new commit. If it's broken, roll back as documented, tell the user, and fix forward.
 
@@ -255,9 +255,9 @@ Your last message must contain everything:
 - **Skipped:** workspaces not in scope, and any session that couldn't be reached.
 - **Open actions: K · Open decisions: N · Open tests: M**, each with its open IDs and a link or pointer to that workspace, and the answers that came back and what you did with them. Don't repeat the items themselves here.
 - **Follow-ups:** anything noticed along the way that isn't a decision or a test (e.g. an unexpected env var). Numbered, one line each.
-- **Clean-up:** each workspace's `/safe-to-archive` verdict (✅ safe, or ⛔ with what's left), so the user knows which to archive in Conductor. If `safe-to-archive` isn't installed, say so and list the workspaces whose PRs and archive PRs are merged.
+- **Clean-up:** each workspace's `/babysitter:safe-to-archive` verdict (✅ safe, or ⛔ with what's left), so the user knows which to archive in Conductor. If `safe-to-archive` isn't installed, say so and list the workspaces whose PRs and archive PRs are merged.
 
-Keep watching Open Actions, Open Decisions and Open Tests after the report, and carry out answers as they come back (step 9). When all three reach 0 and every answer is handled, post a last plain-language wrap-up. Then, if `safe-to-archive` is installed, run `/safe-to-archive` in this workspace as your final command.
+Keep watching Open Actions, Open Decisions and Open Tests after the report, and carry out answers as they come back (step 9). When all three reach 0 and every answer is handled, post a last plain-language wrap-up. Then, if `safe-to-archive` is installed, run `/babysitter:safe-to-archive` in this workspace as your final command.
 
 ## 9. Open Actions, Open Decisions and Open Tests
 
@@ -276,13 +276,13 @@ An existing queue from an older babysitter (its first message has no IDs, items 
 **Queue prompt** (the first message of a new one; fill in this workspace's name):
 
 ```
-You're the Open <Actions|Decisions|Tests> queue for `/babysitter`, which runs in the workspace "<this workspace's name>". It will send you <actions only the user can do|decisions the user may want to revisit|tests only the user can do>, each starting with "Via Babysitter:". Don't change code or open PRs yourself: the babysitter carries out the answers.
+You're the Open <Actions|Decisions|Tests> queue for `/babysitter:hq`, which runs in the workspace "<this workspace's name>". It will send you <actions only the user can do|decisions the user may want to revisit|tests only the user can do>, each starting with "Via Babysitter:". Don't change code or open PRs yourself: the babysitter carries out the answers.
 
 - Present one item at a time, by priority: release-blocking first, then normal, then minor; oldest first within each. Wait for the user's reply before the next. If new items arrive while one is waiting, queue them, and let a release-blocking one jump ahead of what's queued.
 - Every item arrives with an ID (OA001, OD001 or OT001 and up). Use it everywhere you refer to the item. Keep a ledger at the top of your mind: which IDs are open, which are done. Before each item, say how many are open and list them: "5 open: OD005, OD016, OD021, OD027, OD031. Next up, **OD005**: …".
 - The items come from different milestones, so each one stands on its own: after the ID, the milestone and feature in plain words, the workspace it came from, and what was built and why this is open.
 - Always offer skip.
-- After each reply, write one line starting "Done:" (actions), "Answered:" (decisions) or "Result:" (tests) with the item's ID, the reply, and anything the user added, then present the next item. If asked for a status, or when `/status-check` runs here, list the open IDs with one line each.
+- After each reply, write one line starting "Done:" (actions), "Answered:" (decisions) or "Result:" (tests) with the item's ID, the reply, and anything the user added, then present the next item. If asked for a status, or when `/babysitter:status-check` runs here, list the open IDs with one line each.
 - When the last open item is answered, post a short, warm message that makes the user feel good: what they got through, what it unblocked, and that the queue is empty. If more items arrive later, start again.
 ```
 

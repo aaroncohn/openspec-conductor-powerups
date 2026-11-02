@@ -1,6 +1,6 @@
 ---
 name: new-batch-explore
-description: Pick the next 2–5 roadmap milestones that can be worked in parallel and open a Conductor workspace for each (local or cloud, matching where it runs), started in /opsx:explore mode and named m{milestoneID}-short-name (e.g. m10-alerts). Reads the roadmap from origin (fresh fetch), skips milestones that are done, blocked on someone else, or already in an open workspace. Use when the user runs /new-batch-explore or asks to "start the next batch", "spin up workspaces for the next milestones", or "what should we explore next in parallel".
+description: Pick the next 2–5 roadmap milestones that can be worked in parallel and open a Conductor workspace for each (local or cloud, matching where it runs), started in /opsx:explore mode and named m{milestoneID}-short-name (e.g. m10-alerts). Reads the roadmap from origin (fresh fetch), skips milestones that are done, blocked on someone else, or already in an open workspace. Use when the user runs `/babysitter:new-batch-explore` or asks to "start the next batch", "spin up workspaces for the next milestones", or "what should we explore next in parallel".
 ---
 
 # new-batch-explore
@@ -87,7 +87,7 @@ ENC=$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.re
 ENC_ROOT=$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$ROOT")
 BEFORE=$(sqlite3 "$DB" "select count(*) from workspaces where repository_id=(select id from repos where root_path='$SQL_ROOT')")
 # The Create dialog follows the organization switcher at the top left, not this link: on a cloud organization it
-# makes a cloud workspace on that organization's last repo. Run `conductor-local.py org` (in the babysitter skill)
+# makes a cloud workspace on that organization's last repo. Run `conductor-local.py org` (in the hq skill)
 # first; if it says cloud, ask the user to switch to the organization that shows this repo, and wait.
 open "conductor://new?path=$ENC_ROOT&prompt=$ENC"
 # then poll until a new row appears (give the user up to ~3 minutes)

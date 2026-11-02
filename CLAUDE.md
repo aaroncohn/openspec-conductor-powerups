@@ -1,18 +1,18 @@
 # CLAUDE.md
 
-A Claude Code plugin, `powerups`, with opinionated skills for people who use OpenSpec inside Conductor. Mostly solo developers, on local and cloud Conductor workspaces. Public, MIT. See README.md for what each skill does.
+A Claude Code plugin, `babysitter`, with opinionated skills for people who use OpenSpec inside Conductor. Mostly solo developers, on local and cloud Conductor workspaces. Public, MIT. See README.md for what each skill does.
 
 ## Layout
 
-- `.claude-plugin/plugin.json`: the plugin. `name` is `powerups`. No `version`, on purpose.
-- `.claude-plugin/marketplace.json`: the marketplace, `openspec-conductor-powerups`, with one plugin at `./`.
-- `skills/<name>/SKILL.md`: one skill each. `cloud.md` beside it holds the cloud steps. `skills/babysitter/conductor-local.py` holds babysitter's local, deterministic steps (scan, send, watch); `skills/babysitter/state.py` keeps its state file (IDs, workspace table, counts) and works locally and in the cloud. `skills/doctor/doctor.py` is the read-only health check.
+- `.claude-plugin/plugin.json`: the plugin. `name` is `babysitter`. No `version`, on purpose.
+- `.claude-plugin/marketplace.json`: the marketplace, also `babysitter`, with one plugin at `./`.
+- `skills/<name>/SKILL.md`: one skill each. `cloud.md` beside it holds the cloud steps. `skills/hq/conductor-local.py` holds babysitter's local, deterministic steps (scan, send, watch); `skills/hq/state.py` keeps its state file (IDs, workspace table, counts) and works locally and in the cloud. `skills/doctor/doctor.py` is the read-only health check.
 
 ## Releases
 
 Every commit to `main` is a release. Users with auto-update get it right away, so `main` must always work. Test before merging.
 
-Never add a `version` to plugin.json. Never rename the plugin (`powerups`) or the marketplace (`openspec-conductor-powerups`) without a `renames` entry in marketplace.json.
+Never add a `version` to plugin.json. Never rename the plugin (`babysitter`) without a `renames` entry in marketplace.json. Don't rename the marketplace (`babysitter`): `renames` doesn't cover it, so every install would have to remove it and add it again.
 
 ## Testing a change
 
@@ -22,7 +22,7 @@ Never add a `version` to plugin.json. Never rename the plugin (`powerups`) or th
    ```bash
    export CLAUDE_CONFIG_DIR=$(mktemp -d)
    claude plugin marketplace add "$PWD"
-   claude plugin install powerups@openspec-conductor-powerups
+   claude plugin install babysitter@babysitter
    ```
 3. For a live run, start a session with `claude --plugin-dir .`.
 4. If you touched `conductor-local.py` or `state.py`: `python3 -m py_compile` it, and keep its asserts passing (`check_stage()` runs first on `scan`; `state.py`'s `check()` runs first on every command). Add an assert when you change logic.
@@ -43,7 +43,7 @@ No details from any one project: accounts, domains, people, product names. The s
 - Skills are prompts: shorter beats longer. Cut what the model would do anyway.
 - `skills/<name>/examples/*.md` are golden examples of what a skill's output should look like: few-shot for the model, and the reference when reviewing a change. Made-up product, no real project. Update them when the shape changes.
 - Deterministic steps (queries, parsing, loops) belong in a script, not prose.
-- Skill frontmatter: `description` says what it does and when to use it. Use `disable-model-invocation: true` for skills that should only run when the user types them (babysitter, better-decision).
+- Skill frontmatter: `description` says what it does and when to use it. Use `disable-model-invocation: true` for skills that should only run when the user types them (hq, pause, keep-going, better-decision).
 - A new skill also goes in the README table and, if it changes what the plugin does, in the descriptions in plugin.json and marketplace.json.
 
 ## Git

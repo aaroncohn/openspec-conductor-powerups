@@ -1,6 +1,6 @@
 ---
 name: safe-to-archive
-description: Check whether the current Conductor workspace can be archived without losing work — uncommitted or unpushed changes, open or missing PRs, commits added after the merge, stashes, .context and other ignored files that exist only here, running processes, and (in OpenSpec repos) unarchived changes. Read-only; gives a yes/no verdict with the fix for each blocker. Use when the user runs /safe-to-archive or asks "can I archive this workspace/session?", "is this workspace done?", or "safe to archive?".
+description: Check whether the current Conductor workspace can be archived without losing work — uncommitted or unpushed changes, open or missing PRs, commits added after the merge, stashes, .context and other ignored files that exist only here, running processes, and (in OpenSpec repos) unarchived changes. Read-only; gives a yes/no verdict with the fix for each blocker. Use when the user runs `/babysitter:safe-to-archive` or asks "can I archive this workspace/session?", "is this workspace done?", or "safe to archive?".
 ---
 
 # safe-to-archive

@@ -23,7 +23,7 @@ You answered OD010 (keep the folder icon blue); nothing to change.
 | --- | --- | --- | --- | --- | --- | --- |
 | apply-m12-magic-link (#219) | apply | M | tasks done, e-mail suite re-running | your expiry answer, then merge | ~2 h, 6:30 pm EST | x |
 | apply-m14-export | apply | L | building the export | open PR | ~3 h, 7:30 pm EST | x |
-| archive-m11-shared-folders (#214) | archive | M | merged, archive PR merged | `/safe-to-archive` | done | x |
+| archive-m11-shared-folders (#214) | archive | M | merged, archive PR merged | `/babysitter:safe-to-archive` | done | x |
 | explore-m15-search | explore | XL | user exploring | `/opsx:propose` | on you | |
 
 Next digest around 4:30 pm EST, if anything changes.
@@ -48,7 +48,7 @@ A quiet one, when nothing moved:
 | --- | --- | --- | --- | --- | --- | --- |
 | apply-m12-magic-link (#219) | apply | M | e-mail suite re-running | your expiry answer, then merge | ~2 h, 6:30 pm EST | x |
 | apply-m14-export | apply | L | building the export | open PR | ~3 h, 7:30 pm EST | x |
-| archive-m11-shared-folders (#214) | archive | M | merged, archive PR merged | `/safe-to-archive` | done | x |
+| archive-m11-shared-folders (#214) | archive | M | merged, archive PR merged | `/babysitter:safe-to-archive` | done | x |
 | explore-m15-search | explore | XL | user exploring | `/opsx:propose` | on you | |
 
 Next digest around 5:00 pm EST, if anything changes.

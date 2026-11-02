@@ -1,14 +1,14 @@
 ---
 name: status-check
-description: Where things stand, from whichever workspace it's run in. In Babysitter HQ it's a full digest with the workspace table. In an Open Actions, Open Decisions or Open Tests workspace it's how many items are open, each by ID with a line on what it is. In any other workspace it's that workspace's stage, PR and checks, and what's left before merge. Use when the user runs /status-check or asks "where are we?", "what's open?", "status?".
+description: Where things stand, from whichever workspace it's run in. In Babysitter HQ it's a full digest with the workspace table. In an Open Actions, Open Decisions or Open Tests workspace it's how many items are open, each by ID with a line on what it is. In any other workspace it's that workspace's stage, PR and checks, and what's left before merge. Use when the user runs `/babysitter:status-check` or asks "where are we?", "what's open?", "status?".
 ---
 
 # status-check
 
 Say where things stand, in the shape that fits the workspace you're in. Work out which one from this chat first; if it isn't obvious, check in this order:
 
-1. **Babysitter HQ:** `/babysitter` ran in this chat, or `.context/babysitter.json` exists here.
-2. **A queue:** this chat's first message is the Open Actions, Open Decisions or Open Tests queue prompt ("You're the Open … queue for /babysitter").
+1. **Babysitter HQ:** `/babysitter:hq` ran in this chat, or `.context/babysitter.json` exists here.
+2. **A queue:** this chat's first message is the Open Actions, Open Decisions or Open Tests queue prompt ("You're the Open … queue for `/babysitter:hq`", or `/babysitter` in a queue opened before the rename).
 3. **Anything else:** a change workspace.
 
 Times are in the user's timezone, as in babysitter ("4:10 pm EST"), never UTC.
