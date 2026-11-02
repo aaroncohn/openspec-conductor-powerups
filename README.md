@@ -109,11 +109,11 @@ To keep a hand on the release, add an option (a flag or plain words both work):
 | `/babysitter --stop-after dev` | after full CI on `main` and the dev deploy are green; you release to production |
 | `/babysitter --stop-after merged` | once every change is merged and archived; no CI run on `main`, no deploys |
 
-You can also name the workspaces or milestones to cover: `/babysitter 2.1 2.3 --auto-prod`.
+You can also name the workspaces or milestones to cover: `/babysitter 2.1 2.3 --auto-prod`, and set the pace in plain words ("release once a day", "update me every 30 minutes"). By default it releases at most twice a day, even when you add workspaces mid-run. A `## babysitter` section in your `AGENTS.md`/`CLAUDE.md` can hold these defaults for every run (`stop after: dev`, `release: once a day`, `Timezone: America/New_York`).
 
 ### What you'll see
 
-- **In Babysitter HQ:** a digest about every hour, if anything changed (or when you ask "what's the latest?"): what just got done, in plain words about what your product gained; what's waiting on you; what each workspace is working on now; the open actions, decisions and tests; a table of every workspace with its stage and progress; and when the next digest is due. Between digests it stays silent, unless something needs you or something broke. Say "update me every 30 minutes" to change the pace. Times are in your timezone ("7:45 pm EDT"); in a cloud workspace it asks once, unless your `AGENTS.md`/`CLAUDE.md` names one (e.g. `Timezone: America/New_York`).
+- **In Babysitter HQ:** a digest about every hour, if anything changed (or when you ask "what's the latest?"): what just got done, in plain words about what your product gained; what's waiting on you; what each workspace is working on now; the open actions, decisions and tests; a table of every workspace with its stage, effort (S to XL), progress and next step; and when the next digest is due. Between digests it stays silent, unless something needs you or something broke. Say "update me every 30 minutes" to change the pace. Times are in your timezone ("7:45 pm EDT"); in a cloud workspace it asks once, unless your `AGENTS.md`/`CLAUDE.md` names one (e.g. `Timezone: America/New_York`).
 - **In a workspace that's waiting on you:** its last message starts with `⚠️ BLOCKED: DECISION NEEDED: …` or `⚠️ BLOCKED: ACTION NEEDED: …`, with options and a recommendation or the steps. If a session stops and the babysitter can't get it going again, it leaves `⚠️ STOPPED (via Babysitter): …` there, saying what it tried and what you can do.
 - **On a team:** if your `AGENTS.md`/`CLAUDE.md` names more than one owner, each blocked item and each queue item says who should answer it. Otherwise everything goes to whoever ran `/babysitter`.
 
