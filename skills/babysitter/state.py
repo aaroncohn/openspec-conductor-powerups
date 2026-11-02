@@ -18,6 +18,9 @@ Works the same locally and in the cloud: it only touches .context/babysitter.jso
   state.py counts                                    the digest's "Open actions: K (OA001, ...) · ..." line
   state.py show                                      everything, readable
   state.py digest-posted | last-digest               note a digest's time; print the last one
+  state.py pause | resume | paused                   /pause-babysitter and /resume-babysitter; pause and resume print
+                                                     the sessions to hold or release. No state file: error, not HQ.
+  state.py other-hq                                  stdin: as sync-scan; exits non-zero if another Babysitter HQ is open
 """
 import datetime, json, os, sys, tempfile
 
@@ -106,27 +109,73 @@ def workspace_set(state, name, **fields):
 
 
 def sync_scan(state, text, self_path=None, self_id=None):
-    # Accepts conductor-local.py scan (one JSON object per line: name, path, branch, session, stage, pr)
-    # or conductor workspace list --json ({"data": [{id, name, branch, ...}]}).
-    text = text.strip()
-    rows = json.loads(text).get("data", []) if text.startswith("{") and '"data"' in text.splitlines()[0] \
-        else [json.loads(l) for l in text.splitlines() if l.strip()]
     seen = set()
-    for r in rows:
-        if r.get("path") and self_path and os.path.realpath(r["path"]) == os.path.realpath(self_path):
+    for r in scan_rows(text):
+        if is_self(r, self_path, self_id):
             continue
-        if r.get("id") and self_id and r["id"] == self_id:
-            continue
-        name = r.get("name") or os.path.basename(r.get("path") or "") or r.get("id")
+        name = row_name(r)
         pr = r.get("pr")
         fields = {"path": r.get("path"), "branch": r.get("branch"), "session": r.get("session") or r.get("id"),
                   "stage": r.get("stage"), "pr": pr and pr.get("number")}
+        if name not in state["workspaces"]:
+            carry_over_rename(state, name, fields)
         workspace_set(state, name, present=True, **fields)
         seen.add(name)
     for name, w in state["workspaces"].items():
         if name not in seen:
             w["present"] = False
     return sorted(seen)
+
+
+def scan_rows(text):
+    # Accepts conductor-local.py scan (one JSON object per line: name, path, branch, session, stage, pr)
+    # or conductor workspace list --json ({"data": [{id, name, ...}]}, pretty-printed over many lines).
+    text = text.strip()
+    try:
+        whole = json.loads(text)
+        if isinstance(whole, dict) and "data" in whole:
+            return whole["data"]
+    except ValueError:
+        pass
+    return [json.loads(l) for l in text.splitlines() if l.strip()]
+
+
+def is_self(r, self_path, self_id):
+    if r.get("path") and self_path and os.path.realpath(r["path"]) == os.path.realpath(self_path):
+        return True
+    return bool(r.get("id") and self_id and r["id"] == self_id)
+
+
+def row_name(r):
+    return r.get("name") or os.path.basename(r.get("path") or "") or r.get("id")
+
+
+def carry_over_rename(state, name, fields):
+    # A stage rename is the same workspace: keep its effort, ETA and monitoring under the new name.
+    for old, w in state["workspaces"].items():
+        if (fields["path"] and w.get("path") == fields["path"]) or (fields["session"] and w.get("session") == fields["session"]):
+            state["workspaces"][name] = {**state["workspaces"].pop(old), "name": name}
+            return
+
+
+def other_hqs(text, self_path=None, self_id=None):
+    return [f"{row_name(r)} ({r.get('deepLink') or r.get('path') or r.get('id')})" for r in scan_rows(text)
+            if bare(row_name(r) or "") == "Babysitter HQ" and not is_self(r, self_path, self_id)]
+
+
+def pause(state):
+    # Returns the sessions to hold, or None if already paused. Queues keep taking the user's answers.
+    if state.get("paused"):
+        return None
+    held = [{"name": w["name"], "session": w.get("session") or ""} for n, w in sorted(state["workspaces"].items())
+            if w.get("present", True) and w.get("monitoring") and bare(n) not in QUEUES]
+    state["paused"] = {"since": now(), "held": held}
+    return held
+
+
+def resume(state):
+    # Returns what pause() stored, or None if not paused.
+    return state.pop("paused", None)
 
 
 def table(state):
@@ -151,7 +200,7 @@ def bare(name):
 
 
 def show(state):
-    out = ["options: " + (", ".join(f"{k}={v}" for k, v in sorted(state["options"].items())) or "(none)"),
+    out = ([f"PAUSED since {state['paused']['since']}: do nothing on your own until /resume-babysitter", ""] if state.get("paused") else []) + ["options: " + (", ".join(f"{k}={v}" for k, v in sorted(state["options"].items())) or "(none)"),
            "last digest: " + (state["digests"][-1] if state["digests"] else "(none)"), "", table(state), "", counts(state)]
     for item_id, it in open_items(state):
         out.append(f"- {item_id} · {it['title']} · {it['grade']}" + (f" · from {it['workspace']}" if it["workspace"] else ""))
@@ -193,6 +242,20 @@ def check():
         assert "explore-m2-b" not in table(s) and "propose-m2-b" in table(s)   # renamed: old row marked gone
         cloud = json.dumps({"data": [{"id": "ws1", "name": "apply-m3-c", "branch": "m3"}, {"id": "hq", "name": "HQ"}]})
         assert sync_scan(s, cloud, self_id="hq") == ["apply-m3-c"] and "apply-m1-a" not in table(s)
+        pretty = json.dumps({"data": [{"id": "ws1", "name": "apply-m3-c"}], "hasMore": False}, indent=2)   # what the CLI prints
+        assert sync_scan(s, pretty, self_id="hq") == ["apply-m3-c"] and scan_rows("") == []
+        one = json.dumps({"name": "m9", "path": "/w/9", "stage": "propose", "session": "s9"})
+        sync_scan(s, one); workspace_set(s, "m9", effort="L", monitoring="yes")
+        sync_scan(s, one.replace('"m9"', '"apply-m9"'))         # a rename keeps the row's fields
+        assert s["workspaces"]["apply-m9"]["effort"] == "L" and s["workspaces"]["apply-m9"]["monitoring"] and "m9" not in s["workspaces"]
+        workspace_set(s, "Open Tests", monitoring="yes", present=True)
+        assert pause(s) == [{"name": "apply-m9", "session": "s9"}]   # a queue isn't held
+        assert pause(s) is None and "PAUSED" in show(s)
+        assert resume(s)["held"][0]["name"] == "apply-m9" and resume(s) is None and "PAUSED" not in show(s)
+        hq = '\n'.join(json.dumps(r) for r in [{"name": "Babysitter HQ", "path": "/w/hq"}, {"name": "apply-m1", "path": "/w/a"}])
+        assert other_hqs(hq, self_path="/w/hq") == [] and other_hqs(hq, self_path="/w/a") == ["Babysitter HQ (/w/hq)"]
+        assert other_hqs(json.dumps({"data": [{"id": "h", "name": "Babysitter HQ", "deepLink": "conductor://x"}]}, indent=2)) == ["Babysitter HQ (conductor://x)"]
+        assert other_hqs(json.dumps({"data": [{"id": "h", "name": "Babysitter HQ"}]}), self_id="h") == []
         save(s); assert load()["next"] == s["next"]
     finally:
         PATH = keep
@@ -201,6 +264,11 @@ def check():
 def main(argv):
     cmd, args = (argv[0], argv[1:]) if argv else ("", [])
     pos, opts = flags(args)
+    if cmd == "other-hq":
+        found = other_hqs(sys.stdin.read(), self_path=".", self_id=os.environ.get("CONDUCTOR_WORKSPACE_ID"))
+        return sys.exit(f"another Babysitter HQ is open for this repo: {', '.join(found)}") if found else None
+    if cmd in ("pause", "resume", "paused") and not os.path.exists(PATH):
+        sys.exit(f"no babysitter state here ({PATH}): this isn't Babysitter HQ. Nothing changed; run this in the Babysitter HQ workspace.")
     state = load()
     if cmd == "option" and pos[:1] == ["set"] and len(pos) == 3:
         state["options"][pos[1]] = pos[2]
@@ -233,6 +301,20 @@ def main(argv):
         return print(counts(state))
     elif cmd == "show":
         return print(show(state))
+    elif cmd == "pause":
+        held = pause(state)
+        if held is None:
+            return print(f"already paused since {state['paused']['since']}")
+        print(f"paused at {state['paused']['since']}; sessions to hold:")
+        print("\n".join(f"{h['name']}\t{h['session']}" for h in held) or "(none)")
+    elif cmd == "resume":
+        was = resume(state)
+        if was is None:
+            return print("not paused")
+        print(f"resumed; paused since {was['since']}; sessions to release:")
+        print("\n".join(f"{h['name']}\t{h['session']}" for h in was["held"]) or "(none)")
+    elif cmd == "paused":
+        return print(f"paused since {state['paused']['since']}" if state.get("paused") else "running")
     elif cmd == "digest-posted":
         state["digests"].append(now())
     elif cmd == "last-digest":

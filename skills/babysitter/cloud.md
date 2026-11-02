@@ -1,14 +1,24 @@
 # babysitter in a Conductor cloud workspace
 
-Read this when `CONDUCTOR_IS_LOCAL` is `0`. Every workspace runs in its own Linux sandbox, so there are no sibling worktrees, no `ListAgents`, and no `SendMessage`. Use the `conductor` CLI instead; it's on the `PATH` in cloud workspaces. These sections replace steps 1, 3 and 4 of `SKILL.md`. Everything else applies as written, including what `main` means.
+Read this when `CONDUCTOR_IS_LOCAL` is `0`. Every workspace runs in its own Linux sandbox, so there are no sibling worktrees, no `ListAgents`, and no `SendMessage`. Use the `conductor` CLI instead; it's on the `PATH` in cloud workspaces. These sections replace the one-HQ check and steps 1, 3 and 4 of `SKILL.md`. Everything else applies as written, including what `main` means.
 
 If `conductor` fails with an auth error, tell the user that the workspace has no API token: they can turn on automatic API access in Conductor → Settings → General (it applies to new workspaces) or set their own `CONDUCTOR_API_KEY`. Stop until it works.
 
-## 1. Find the workspaces
+## One HQ per repo
+
+Before anything else:
 
 ```bash
 git fetch origin -q
 REPO=$(basename -s .git "$(git remote get-url origin)")
+conductor workspace list --mine --repo "$REPO" --name "Babysitter HQ" --json | python3 <this skill's dir>/state.py other-hq
+```
+
+A non-zero exit means stop, as in `SKILL.md`. It skips `$CONDUCTOR_WORKSPACE_ID`; if that isn't set and the one it names is this workspace, carry on. `--mine` is on purpose: someone else's HQ only drives their own workspaces.
+
+## 1. Find the workspaces
+
+```bash
 conductor workspace list --mine --repo "$REPO" --json --limit 100     # page with --offset while hasMore
 conductor workspace session <workspaceId> --json                      # its sessions
 ```
