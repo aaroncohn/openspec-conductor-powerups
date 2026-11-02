@@ -86,6 +86,9 @@ Fire them **one at a time** — the Create dialog has a single shared draft, so 
 ENC=$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read()))' <<< "$PROMPT")
 ENC_ROOT=$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$ROOT")
 BEFORE=$(sqlite3 "$DB" "select count(*) from workspaces where repository_id=(select id from repos where root_path='$SQL_ROOT')")
+# The Create dialog follows the organization switcher at the top left, not this link: on a cloud organization it
+# makes a cloud workspace on that organization's last repo. Run `conductor-local.py org` (in the babysitter skill)
+# first; if it says cloud, ask the user to switch to the organization that shows this repo, and wait.
 open "conductor://new?path=$ENC_ROOT&prompt=$ENC"
 # then poll until a new row appears (give the user up to ~3 minutes)
 for i in $(seq 1 90); do

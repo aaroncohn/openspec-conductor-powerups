@@ -8,6 +8,7 @@ fail() { echo "✗ $1"; exit 1; }
 python3 -m py_compile skills/babysitter/conductor-local.py skills/babysitter/state.py skills/doctor/doctor.py
 BABYSITTER_STATE="$(mktemp -d)/s.json" python3 skills/babysitter/state.py counts >/dev/null
 python3 -c 'import importlib.util as u, sys; s=u.spec_from_file_location("c","skills/babysitter/conductor-local.py"); m=u.module_from_spec(s); s.loader.exec_module(m); m.check_stage(); m.check_scan_changes()'
+grep -q "'steer'" skills/babysitter/conductor-local.py || fail "conductor-local.py send must use mode steer (Conductor 0.92 stopped draining queue)"
 echo "✓ scripts compile and self-tests pass"
 
 # 2. Prompt invariants: things that drifted once and must not again.

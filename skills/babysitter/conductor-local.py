@@ -7,7 +7,11 @@ yourself. It relies on Conductor internals: a Conductor update can break it. The
 be open. Back up first:  sqlite3 "$CONDUCTOR_DB_PATH" ".backup '<file>'"
 
   conductor-local.py session <worktree path>          print the workspace's chat session id
-  conductor-local.py send <session id> <message file> queue the message, wait until it's delivered
+  conductor-local.py send <session id> <message file> [--now]
+                                                       deliver the message once the session is idle (--now: right away,
+                                                       mid-turn), and wait up to 5 minutes for Conductor to deliver it
+  conductor-local.py org                               the organization the app is switched to, and whether it's the
+                                                       cloud one (the Create dialog follows it; see SKILL.md step 9)
   conductor-local.py watch [<session id> ...]         block until there's something to act on (see watch())
   conductor-local.py scan                              one JSON line per open workspace of this repo (read-only)
 """
@@ -30,21 +34,30 @@ def session(path):
     print(row[0])
 
 
-def send(session_id, message_file):
+def send(session_id, message_file, now_flag=False):
+    # The row matches what the app writes in Conductor 0.92 (mode "steer", empty config, queue_order 1); the
+    # older "queue" mode stopped being drained in 0.92. "steer" lands mid-turn, so unless --now was given,
+    # wait for the session to go idle first, which is what the old "queue" did for us.
     message = open(message_file).read().strip()
     db = connect()
-    row = db.execute("select config from session_state where session_id = ?", (session_id,)).fetchone()
-    if not row or not row[0]:
-        sys.exit(f"session {session_id} has no saved config; use SendMessage instead")
+    if not db.execute("select 1 from sessions where id = ?", (session_id,)).fetchone():
+        sys.exit(f"no session {session_id}; use SendMessage instead")
+    if not now_flag:
+        for _ in range(360):  # up to 30 minutes
+            if not is_working(db, session_id):
+                break
+            time.sleep(5)
+        else:
+            sys.exit("session still working after 30 minutes; try again, or --now to steer it mid-turn")
     now = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
     mid = str(uuid.uuid4())
     db.execute(
         "insert into session_messages_outbox (message_id, session_id, delivery_payload, config, mode, asset_ids,"
         " queue_order, state, send_attempt_count, next_send_attempt_at, created_at, updated_at)"
-        " values (?, ?, ?, ?, 'queue', '[]', 0, 'ready', 0, ?, ?, ?)",
-        (mid, session_id, json.dumps({"message": message}), row[0], now, now, now))
+        " values (?, ?, ?, '{}', 'steer', '[]', 1, 'ready', 0, ?, ?, ?)",
+        (mid, session_id, json.dumps({"message": message}), now, now, now))
     db.commit()
-    for _ in range(60):  # Conductor picked up test messages in 14-20s
+    for _ in range(150):  # usually seconds, sometimes close to 2 minutes
         time.sleep(2)
         if db.execute("select 1 from session_messages where id = ?", (mid,)).fetchone():
             print(f"delivered {mid}")
@@ -52,7 +65,33 @@ def send(session_id, message_file):
     # Not picked up: take it back so it can't arrive later on top of a fallback message.
     db.execute("delete from session_messages_outbox where message_id = ?", (mid,))
     db.commit()
-    sys.exit("not delivered within 2 minutes (is the Conductor app open?); message withdrawn")
+    sys.exit("not delivered within 5 minutes (is the Conductor app open?); message withdrawn")
+
+
+def is_working(db, session_id):
+    return (db.execute("select status from sessions where id = ?", (session_id,)).fetchone() or [""])[0] == "working"
+
+
+def org():
+    # The app's Create dialog (conductor://new) creates the workspace in the organization the switcher at the
+    # top left is on, whatever path the link names. On a cloud organization that means a cloud workspace on
+    # that organization's last repo. Say which it is before opening a dialog.
+    path = os.path.join(os.path.dirname(DB), "local-storage.subsystem.active-organization.json")
+    try:
+        active = next(iter(json.load(open(path)).values())).strip('"')
+    except (OSError, ValueError, StopIteration):
+        return print("unknown: can't read the app's active organization")
+    cloud = out(["conductor", "auth", "whoami", "--json"], ".")
+    cloud_id = ""
+    for line in cloud.splitlines():
+        if line.startswith("Organization ID"):
+            cloud_id = line.split()[-1]
+    if cloud_id and active == cloud_id:
+        print(f"cloud: the app is switched to your cloud organization ({active}); a Create dialog will make a cloud workspace")
+    elif cloud_id:
+        print(f"local: the app is switched to {active}, not the cloud organization")
+    else:
+        print(f"unknown: the app is switched to {active}; couldn't tell whether that's the cloud organization (conductor CLI not logged in)")
 
 
 def watch(session_ids):
@@ -65,7 +104,7 @@ def watch(session_ids):
         "select count(*) from session_messages where session_id = ? and role = 'assistant'"
         " and content like '{\"type\":\"result\"%'", (s,)).fetchone()[0]
     count = lambda s: db.execute("select count(*) from session_messages where session_id = ?", (s,)).fetchone()[0]
-    working = lambda s: (db.execute("select status from sessions where id = ?", (s,)).fetchone() or [""])[0] == "working"
+    working = lambda s: is_working(db, s)
     start = {s: turns(s) for s in session_ids}
     seen = {s: (count(s), time.time()) for s in session_ids}
     stages, last_scan = snapshot(), time.time()
@@ -204,8 +243,10 @@ if __name__ == "__main__":
     cmd, args = (sys.argv[1], sys.argv[2:]) if len(sys.argv) > 1 else ("", [])
     if cmd == "session" and len(args) == 1:
         session(*args)
-    elif cmd == "send" and len(args) == 2:
-        send(*args)
+    elif cmd == "send" and len(args) in (2, 3) and all(a == "--now" for a in args[2:]):
+        send(args[0], args[1], now_flag=len(args) == 3)
+    elif cmd == "org" and not args:
+        org()
     elif cmd == "watch":
         check_scan_changes()
         watch(args)
