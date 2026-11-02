@@ -92,6 +92,7 @@ These skills are opinionated. They work best if your setup looks like this:
 `babysitter` is built to run without you. Know what it will do:
 
 - It answers other sessions' questions **on your behalf**, picking the recommended option. It lists each decision so you can reverse it.
+- It keeps the big things first. Small, easily reversed items never hold up a merge or a release; they're graded `minor` and come last in the queues, after anything release-blocking.
 - When a session stops to ask for a "go" ("shall I push?", "say go when ready"), it gives the go for you. If a session is waiting for something to finish first (CI, a deploy, a setting you had to change), it watches that and tells the session the moment it's ready. The one go it never gives for you is production, unless you asked for that.
 - It **merges PRs into `main`** and, once you say go, **promotes to production** following your repo's documented procedure (README, CLAUDE.md/AGENTS.md, or workflows). If no procedure is documented, it stops and asks.
 - It never logs in or out of any CLI and never writes secrets to files. Setup that needs your accounts (secrets, dashboards) is handed to you as step-by-step instructions as soon as it comes up.
