@@ -105,7 +105,7 @@ If a session stops responding or its workspace is gone, do the step yourself fro
 Find them by name in `conductor workspace list --mine --repo "$REPO" --json`. To create one, write the queue prompt to a file, then:
 
 ```bash
-conductor workspace create --name "Open Decisions" --branch <default branch> --agent claude --message-file .context/open-decisions.md --json
+conductor workspace create --repo-url "$(git remote get-url origin)" --name "Open Decisions" --branch <default branch> --agent claude --message-file .context/open-decisions.md --json
 ```
 
-(`--name "Open Actions"` or `--name "Open Tests"` for the others.) Then send items with `conductor message create`, as in section 3. The queue session can't message you back: read its "Done:", "Answered:" and "Result:" lines from its transcript, and watch it with the watcher in section 4.
+(`--name "Open Actions"` or `--name "Open Tests"` for the others.) Always pass `--repo-url`: without it the CLI guesses the project, and a queue on the wrong repo is useless. Check it's in `workspace list --mine --repo "$REPO"` before sending anything. Then send items with `conductor message create`, as in section 3. The queue session can't message you back: read its "Done:", "Answered:" and "Result:" lines from its transcript, and watch it with the watcher in section 4.
