@@ -95,7 +95,7 @@ If the repo has values two sessions could both claim (ordered migration timestam
 
 ## 2. Keep a state file
 
-`.context/babysitter.md` has one row per change: workspace, session name, branch, change, PR, archive PR, stage (`building → testing → PR open → merged → post-merge checks → archived`), what the session is waiting on, and notes. Also keep every item sent to Open Decisions, Open Tests and Open Actions (step 9) with its status: open, answered, passed, failed, done, or skipped. Update it after every event. After a context compaction, re-read it before acting.
+`.context/babysitter.md` has one row per change: workspace, session name, branch, change, PR, archive PR, stage (`building → testing → PR open → merged → post-merge checks → archived`), what the session is waiting on, and notes. Also keep every item sent to Open Decisions, Open Tests and Open Actions (step 9) with its ID (step 9, "IDs"), a few words on what it is, and its status: open, answered, passed, failed, done, or skipped. Update it after every event. After a context compaction, re-read it before acting.
 
 **Times are in the user's timezone.** Every time you write, in this chat, in messages to sessions and queues, in the state file and in logs, is in the user's timezone, 12-hour with the zone's current abbreviation: "7:45 pm EDT", never UTC. Work out the zone once, before you first write a time (also when you switch to this skill partway through a run), and keep its name in the state file (e.g. `America/New_York`):
 
@@ -198,7 +198,7 @@ Everything else waits for the next digest: a PR opened, a merge, an archive, an 
 1. **What happened**, in a short paragraph or two of plain words: what finished or moved since the last digest, said as what the product's users get and why it's better, e.g. "The profile-photo workspace opened PR #259. Photos keep their shape, there's a "replace photo" option, and the edit-photo popup is clearer." Fold in, briefly, anything you sorted out along the way ("It had taken a roadmap number another change already uses, so I asked it to move to the next free one"), workspaces you renamed, and each workspace you took over: "Babysitter is taking over <workspace name> now to keep it moving forward. You can tell me to stop babysitting it at any time."
 2. **Waiting on you:** one line per open blocking item or `⚠️ STOPPED` workspace, with the workspace to go to. Leave it out when there are none.
 3. **Working on now:** a bullet per workspace you're babysitting that isn't done: the feature in words (with its PR or roadmap number), what it's doing, and what's next, e.g. "**Instant email sign-in (#252):** one unrelated test failed, so it's being re-run on its own."
-4. **Open actions: K · Open decisions: N · Open tests: M**, the counts in those three workspaces (step 9), plus one line on any answer that came back and what you did with it.
+4. **Open actions: K · Open decisions: N · Open tests: M**, the counts in those three workspaces (step 9), each followed by the open IDs ("Open decisions: 5 (OD005, OD016, OD021, OD027, OD031)"), plus one line on any answer that came back and what you did with it.
 5. **The workspace table:** one row per open workspace of this repo except this one and the three queues, from a fresh scan, with these columns:
    - **workspace**: its name
    - **stage**: explore, propose, apply or archive
@@ -208,7 +208,7 @@ Everything else waits for the next digest: a PR opened, a merge, an archive, an 
    - **babysitter monitoring?**: narrow, `x` for the ones you're babysitting
 6. The last line says when the next digest is due: "Next digest around <time>, if anything changes." (e.g. "around 7:45 pm EDT, if anything changes")
 
-**Plain words everywhere:** name each feature in words, not just its roadmap ID ("2.2b, the spam check"). Leave out test counts, file names, task numbers, CI job names and internal labels unless something failed or the user has to act on them; then say what it means for the user. Don't invent codes like "C1"; describe the item.
+**Plain words everywhere:** name each feature in words, not just its roadmap ID ("2.2b, the spam check"). Leave out test counts, file names, task numbers, CI job names and internal labels unless something failed or the user has to act on them; then say what it means for the user. The only codes are the queue IDs (OA001, OD001, OT001, step 9), and each comes with a few words on what it is.
 
 The first message and the final report have the table too.
 
@@ -230,7 +230,7 @@ Your last message must contain everything:
 
 - **Shipped:** a table with one row per change: PR, archive PR, merged ✅, archived ✅. Then: full CI on main ✅ (run link), dev ✅, and production ✅ (commit, deploy link, URL verified, migrations applied). If an option stopped earlier, say where it stopped and what's left to release.
 - **Skipped:** workspaces not in scope, and any session that couldn't be reached.
-- **Open actions: K · Open decisions: N · Open tests: M**, with a link or pointer to each of those workspaces, and the answers that came back and what you did with them. Don't list the items themselves here.
+- **Open actions: K · Open decisions: N · Open tests: M**, each with its open IDs and a link or pointer to that workspace, and the answers that came back and what you did with them. Don't repeat the items themselves here.
 - **Follow-ups:** anything noticed along the way that isn't a decision or a test (e.g. an unexpected env var). Numbered, one line each.
 - **Clean-up:** each workspace's `/safe-to-archive` verdict (✅ safe, or ⛔ with what's left), so the user knows which to archive in Conductor. If `safe-to-archive` isn't installed, say so and list the workspaces whose PRs and archive PRs are merged.
 
@@ -244,6 +244,8 @@ Actions only the user can do, decisions the user may want to revisit, and tests 
 - **Open Tests** gets every test only the user can do. Send each one once its feature is live where the user can test it (dev or production), not before.
 - **Open Actions** gets every action only the user can do that isn't a decision or a test (step 5): secrets and environment variables, accounts, payment methods, dashboard settings, DNS, as long as it's batch, not blocking. Send each one as soon as it's known. Ones the release waits on go first.
 
+**IDs.** Every item gets an ID when you send it, unique within the repo for as long as the queues live: `OA001`, `OA002`… for actions, `OD001`… for decisions, `OT001`… for tests (three digits, then four if a repo ever gets there). The ID is how the user, the queue and the digests refer to it, with a few words on what it is ("OD016, the spam-check threshold"); never a running position like "7 of 3". Keep the next number for each queue in the state file. At the start of a run, before the first item, read the highest ID each existing queue workspace has seen (its transcript, or ask its session "what's the highest ID you've been sent?") and continue from there, so a new Babysitter HQ never reuses a number. With no queue workspace, start at 001.
+
 **Find or create the workspace.** Before sending an item, look for an open workspace of this repo named `Open Actions`, `Open Decisions` or `Open Tests`. If there is one, send the item to its session. If there isn't (e.g. the last one was finished and archived), create a new one with the queue prompt below as its first message, then send items to it. Locally, create it the way `new-batch-explore` does (a `conductor://new` link the user confirms with Enter, then the name set in Conductor's database) and tell the user to press Enter. In the cloud, see `cloud.md`. Never stage-rename these three workspaces.
 
 **Queue prompt** (the first message of a new one; fill in this workspace's name):
@@ -252,13 +254,14 @@ Actions only the user can do, decisions the user may want to revisit, and tests 
 You're the Open <Actions|Decisions|Tests> queue for /babysitter, which runs in the workspace "<this workspace's name>". It will send you <actions only the user can do|decisions the user may want to revisit|tests only the user can do>, each starting with "Via Babysitter:". Don't change code or open PRs yourself: the babysitter carries out the answers.
 
 - Present one item at a time, oldest first. Wait for the user's reply before the next. If new items arrive while one is waiting, queue them.
-- The items come from different milestones, so each one stands on its own: start with "<Action|Decision|Test> <n> of <open count>", then the milestone and feature in plain words, the workspace it came from, and what was built and why this is open.
+- Every item arrives with an ID (OA001, OD001 or OT001 and up). Use it everywhere you refer to the item. Keep a ledger at the top of your mind: which IDs are open, which are done. Before each item, say how many are open and list them: "5 open: OD005, OD016, OD021, OD027, OD031. Next up, **OD005**: …".
+- The items come from different milestones, so each one stands on its own: after the ID, the milestone and feature in plain words, the workspace it came from, and what was built and why this is open.
 - Always offer skip.
-- After each reply, write one line starting "Done:" (actions), "Answered:" (decisions) or "Result:" (tests) with the item number, the reply, and anything the user added, then present the next item.
+- After each reply, write one line starting "Done:" (actions), "Answered:" (decisions) or "Result:" (tests) with the item's ID, the reply, and anything the user added, then present the next item. If asked for a status, or when `/status-check` runs here, list the open IDs with one line each.
 - When the last open item is answered, post a short, warm message that makes the user feel good: what they got through, what it unblocked, and that the queue is empty. If more items arrive later, start again.
 ```
 
-**Each item you send** ("Via Babysitter: add <action|decision|test>: …") carries everything the queue needs.
+**Each item you send** ("Via Babysitter: add <action|decision|test> <ID>: …") carries everything the queue needs.
 
 For an **action**:
 - the milestone and feature in plain words, the workspace it came from, and whether it holds up a merge or the release
