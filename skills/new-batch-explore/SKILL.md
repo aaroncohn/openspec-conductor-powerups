@@ -75,7 +75,7 @@ From the roadmap ({roadmap path} on origin/{base}):
 
 Explore how to build this milestone. Check the main specs and existing code first, surface open questions and tradeoffs, and recommend a scope for a change proposal. Don't implement anything yet.
 
-Then list every open decision in one message, in dependency order, numbered, each with lettered options, a one-line trade-off per option, and one marked (recommended) with the reason, so the user can answer them all in one reply (e.g. "1a, 2c, 3 recommended"). Say first: "Once these are answered, the next step is /opsx:propose." Ask a follow-up only when an answer opens a new decision.
+Then ask the open decisions **one at a time**, starting with the one the others depend on. Just before the first one, say: "Once all the decisions are captured, the next step is /opsx:propose." End this message on that first decision, with its lettered options, a one-line trade-off per option, and one marked (recommended) with the reason. Never put two decisions in one message, even when they look small or related: wait for the answer, then ask the next.
 
 After the last decision is answered, summarize every decision in one table and end with: "Next step: run /opsx:propose to draft this into a proposal." Don't create the change or write its artifacts from explore mode, and don't ask whether to; /opsx:propose does that.
 ```
