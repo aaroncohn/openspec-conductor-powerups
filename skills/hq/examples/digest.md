@@ -12,6 +12,8 @@ The shape every digest has (step 6). Sections 5 and 6 are pasted from `state.py 
 **Working on now**
 - **Magic-link sign-in (#219):** running the e-mail suite again with the sandbox key, then a browser pass of the sign-in flow. Merged in about 2 hours, around 6:30 pm EST, once you've answered the expiry question.
 - **Note export to PDF (m14, no PR yet):** the session is building the export; first PR in about 3 hours, around 7:30 pm EST.
+- **Share links (#222):** its turn to merge; rebased and re-running the checks that could be affected. Merged in about 20 minutes, around 4:20 pm EST.
+- **Note tags (#221):** tested and ready, first in line to merge after share links, since both touch the note header. Merged around 5 pm EST.
 - Everything merged around 8 pm EST; release in tomorrow morning's window (you asked for once a day).
 
 **Critical path:** magic-link: **your expiry answer** → e-mail suite (~30 min) → rebase and merge → archive PR → full CI on main (~25 min) → dev → release window tomorrow 9 am. Holding it up: the expiry answer.
@@ -23,6 +25,8 @@ You answered OD010 (keep the folder icon blue); nothing to change.
 | --- | --- | --- | --- | --- | --- | --- |
 | apply-m12-magic-link (#219) | apply | M | tasks done, e-mail suite re-running | your expiry answer, then merge | ~2 h, 6:30 pm EST | x |
 | apply-m14-export | apply | L | building the export | open PR | ~3 h, 7:30 pm EST | x |
+| apply-m16-share-links (#222) | apply | S | merging (its turn) | rebase, re-check, merge | ~20 min, 4:20 pm EST | x |
+| apply-m13-tags (#221) | apply | S | waiting to merge (#1 in line) | rebase and merge on its turn | ~30 min, 5 pm EST | x |
 | archive-m11-shared-folders (#214) | archive | M | merged, archive PR merged | `/babysitter:safe-to-archive` | done | x |
 | explore-m15-search | explore | XL | user exploring | `/opsx:propose` | on you | |
 

@@ -1,6 +1,6 @@
 # babysitter in a Conductor cloud workspace
 
-Read this when `CONDUCTOR_IS_LOCAL` is `0`. Every workspace runs in its own Linux sandbox, so there are no sibling worktrees, no `ListAgents`, and no `SendMessage`. Use the `conductor` CLI instead; it's on the `PATH` in cloud workspaces. These sections replace the one-HQ check, steps 1 and 3, and step 4's watcher in `SKILL.md`; step 4's other rules, its re-scan included, still apply. Everything else applies as written, including what `main` means.
+Read this when `CONDUCTOR_IS_LOCAL` is `0`. Every workspace runs in its own Linux sandbox, so there are no sibling worktrees, no `ListAgents`, and no `SendMessage`. Use the `conductor` CLI instead; it's on the `PATH` in cloud workspaces. These sections replace the one-HQ check, steps 1 and 3, and step 4's watcher in `SKILL.md`; step 4's other rules, its re-scan and merge lock included, still apply. Everything else applies as written, including what `main` means.
 
 If `conductor` fails with an auth error, tell the user that the workspace has no API token: they can turn on automatic API access in Conductor → Settings → General (it applies to new workspaces) or set their own `CONDUCTOR_API_KEY`. Stop until it works.
 
@@ -65,7 +65,7 @@ There are no idle notifications in the cloud. Run the watcher in the background 
 python3 <this skill's dir>/watch.py watch "$REPO" --ignore "$(python3 <this skill's dir>/state.py ignored)" <sessionId> <sessionId> ...      # run in the background
 ```
 
-Start it just before you send a message (so the turn it triggers counts). Give it a background timeout of 30 minutes at most, and sooner if the next digest (step 6) comes first. Whether it exits or times out, you woke: re-scan (section 1), then act as in step 4 of `SKILL.md`, and re-start the watcher for the sessions still in flight. Stay silent if nothing changed.
+Start it just before you send a message (so the turn it triggers counts). Give it a background timeout of 30 minutes at most, and sooner if the next digest (step 6) or the merge lock's 45 minutes come first. Whether it exits or times out, you woke: re-scan (section 1), then act as in step 4 of `SKILL.md`, and re-start the watcher for the sessions still in flight. Stay silent if nothing changed.
 
 If a session stops responding or its workspace is gone, do the step yourself from this sandbox (`git fetch origin <branch>` and work on that branch) and say so in the next digest.
 

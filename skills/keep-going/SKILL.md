@@ -11,8 +11,8 @@ disable-model-invocation: true
 3. Catch up on the pause: update this workspace to the latest `main`, do the full re-scan from hq's step 4 (all open workspaces, read from their newest messages) into `state.py sync-scan`, check each held session's PR, and read the queues for answers that came back. Handle those answers (hq step 9), rename what changed stage, and adopt what's new (step 4).
 4. Start the watcher (step 4), then send each released session, plus any other you held:
 
-   > Via Babysitter: resumed. Carry on from where you stopped, with the same rules as before; merging to `main` is approved.
+   > Via Babysitter: resumed. Carry on from where you stopped, with the same rules as before; merging to `main` is approved, still one at a time: wait for `Via Babysitter: your turn to merge`.
 
-   Add the answer if it's waiting on one. A session the user took further by hand during the pause carries on from there. Skip `--now`.
+   Add the answer if it's waiting on one. Tell the merge lock's holder (`state.py merge show`) it still has its turn; everyone else in line keeps waiting, and the next go comes from the merge lock (hq step 4). A session the user took further by hand during the pause carries on from there. Skip `--now`.
 5. Set the goal again (hq step 0).
 6. Post a full digest (step 6), opening with "Resumed; paused for about <how long>." and saying which estimates moved because of the pause. Then `state.py digest-posted`.
