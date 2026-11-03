@@ -14,7 +14,8 @@ be open. Back up first:  sqlite3 "$CONDUCTOR_DB_PATH" ".backup '<file>'"
                                                        cloud one (the Create dialog follows it; see SKILL.md step 9)
   conductor-local.py new-dialog <prompt file>          open the Create dialog on this repo with that prompt, wait up to 3
                                                        minutes for the user to press Enter, print the new workspace as JSON
-  conductor-local.py watch [<session id> ...]         block until there's something to act on (see watch())
+  conductor-local.py watch [--ignore <id>,<id>] [<session id> ...]
+                                                       block until there's something to act on (see watch())
   conductor-local.py scan                              one JSON line per open workspace of this repo (read-only)
 """
 import datetime, glob, json, os, sqlite3, subprocess, sys, time, urllib.parse, uuid
@@ -140,10 +141,11 @@ def new_dialog(prompt_file):
              + (f". New on other repos, maybe from this dialog: {', '.join(elsewhere.values())}" if elsewhere else ""))
 
 
-def watch(session_ids):
+def watch(session_ids, ignore=()):
     # Exits, printing why, when one of these sessions finishes a turn or has been working for 30 minutes
-    # without a new message, or when the scan (every 10 minutes) finds a workspace that's new, gone, or at
-    # a new stage. Everything else stays quiet, so the coordinator only wakes when it has to act.
+    # without a new message, or when the scan (every 10 minutes) finds a workspace that's new, gone, at a new
+    # stage, or has a new turn in a session that isn't watched or ignored. Everything else stays quiet, so the
+    # coordinator only wakes when it has to act.
     db = connect()
     # Conductor records a "result" event at the end of every turn.
     turns = lambda s: db.execute(
@@ -154,6 +156,11 @@ def watch(session_ids):
     start = {s: turns(s) for s in session_ids}
     seen = {s: (count(s), time.time()) for s in session_ids}
     stages, last_scan = snapshot(), time.time()
+    here = os.path.realpath(".")
+    skip = {*session_ids, *ignore}
+    active = lambda st: {v[2]: (v[0], turns(v[2])) for p, v in st.items()
+                         if v[2] and v[2] not in skip and os.path.realpath(p) != here}
+    active_before = active(stages)
     while True:
         time.sleep(5)
         for s in session_ids:
@@ -166,14 +173,14 @@ def watch(session_ids):
                 return print(s, "has been working for 30 minutes without a new message")
         if time.time() - last_scan > 10 * 60:
             now, last_scan = snapshot(), time.time()
-            changes = scan_changes(stages, now)
+            changes = scan_changes(stages, now) + activity_changes(active_before, active(now))
             if changes:
                 return print("\n".join(changes))
 
 
 def snapshot():
     out(["git", "fetch", "origin", "-q"], ".")
-    return {w["path"]: (w["name"] or os.path.basename(w["path"]), w["stage"]) for w in scan_rows()}
+    return {w["path"]: (w["name"] or os.path.basename(w["path"]), w["stage"], w["session"]) for w in scan_rows()}
 
 
 def scan_changes(before, after):
@@ -184,6 +191,10 @@ def scan_changes(before, after):
     return changes
 
 
+def activity_changes(before, after):
+    return [f"activity in unwatched workspace: {after[s][0]}" for s in after if s in before and before[s][1] != after[s][1]]
+
+
 def check_scan_changes():
     a = {"/w/1": ("m1-a", "apply"), "/w/2": ("m2-b", "explore")}
     assert scan_changes(a, a) == []
@@ -191,6 +202,8 @@ def check_scan_changes():
     assert scan_changes(a, {**a, "/w/2": ("m2-b", "propose")}) == ["stage changed: m2-b explore -> propose"]
     assert scan_changes(a, {"/w/1": a["/w/1"]}) == ["workspace gone: m2-b"]
     assert scan_changes({}, {"/w/3": ("m3", "explore")}) == ["new workspace: m3 (explore)"]
+    assert activity_changes({"s": ("m1", 2)}, {"s": ("m1", 2)}) == []
+    assert activity_changes({"s": ("m1", 2)}, {"s": ("m1", 3), "t": ("m2", 1)}) == ["activity in unwatched workspace: m1"]
 
 
 def stage(changes, code, merged):
@@ -247,7 +260,7 @@ def scan_rows():
     base = "origin/" + base_branch()
     db = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
     rows = db.execute(
-        "select w.workspace_name, w.workspace_path, w.branch, w.active_session_id, ifnull(s.status, '')"
+        "select w.workspace_name, w.workspace_path, w.branch, w.active_session_id, ifnull(s.status, ''), s.updated_at"
         " from workspaces w left join sessions s on s.id = w.active_session_id"
         " where w.repository_id = (select id from repos where root_path = ?) and w.state != 'archived'",
         (root,)).fetchall()
@@ -255,7 +268,7 @@ def scan_rows():
     archived = {p.split("-", 3)[-1] for p in
                 out(["git", "ls-tree", "--name-only", base + ":openspec/changes/archive/"], ".").split()}
     rows_out = []
-    for name, path, branch, session_id, status in rows:
+    for name, path, branch, session_id, status, updated in rows:
         changes, unarchived = [], []
         for d in sorted(glob.glob(os.path.join(path or "", "openspec/changes/*/"))):
             change = os.path.basename(d.rstrip("/"))
@@ -274,7 +287,7 @@ def scan_rows():
         code = bool(path and os.path.isdir(path)) and code_work(path, base, merged[0] if merged else None)
         pr = prs[0] if prs else None
         rows_out.append({"name": name, "path": path, "branch": branch, "session": session_id,
-                         "status": status, "base": base, "changes": unarchived,
+                         "status": status, "updated": updated, "base": base, "changes": unarchived,
                          "pr": pr and {"number": pr["number"], "state": pr["state"]},
                          "stage": stage(changes, code, bool(merged))})
     return rows_out
@@ -298,7 +311,8 @@ if __name__ == "__main__":
         new_dialog(*args)
     elif cmd == "watch":
         check_scan_changes()
-        watch(args)
+        ignore = args[args.index("--ignore") + 1].split(",") if "--ignore" in args else []
+        watch([a for i, a in enumerate(args) if a != "--ignore" and args[i - 1:i] != ["--ignore"]], ignore)
     elif cmd == "scan" and not args:
         check_stage()
         scan()

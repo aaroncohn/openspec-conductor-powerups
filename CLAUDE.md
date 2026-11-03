@@ -6,7 +6,7 @@ A Claude Code plugin, `babysitter`, with opinionated skills for people who use O
 
 - `.claude-plugin/plugin.json`: the plugin. `name` is `babysitter`. No `version`, on purpose.
 - `.claude-plugin/marketplace.json`: the marketplace, also `babysitter`, with one plugin at `./`.
-- `skills/<name>/SKILL.md`: one skill each. `cloud.md` beside it holds the cloud steps. `skills/hq/conductor-local.py` holds babysitter's local, deterministic steps (scan, send, watch); `skills/hq/state.py` keeps its state file (IDs, workspace table, counts) and works locally and in the cloud. `skills/doctor/doctor.py` is the read-only health check.
+- `skills/<name>/SKILL.md`: one skill each. `cloud.md` beside it holds the cloud steps. `skills/hq/conductor-local.py` holds babysitter's local, deterministic steps (scan, send, watch); `skills/hq/state.py` keeps its state file (IDs, workspace table, counts) and works locally and in the cloud. `skills/hq/watch.py` is the cloud watcher and re-scan. `skills/doctor/doctor.py` is the read-only health check.
 
 ## Releases
 
@@ -25,7 +25,7 @@ Never add a `version` to plugin.json. Never rename the plugin (`babysitter`) wit
    claude plugin install babysitter@babysitter
    ```
 3. For a live run, start a session with `claude --plugin-dir .`.
-4. If you touched `conductor-local.py` or `state.py`: `python3 -m py_compile` it, and keep its asserts passing (`check_stage()` runs first on `scan`; `state.py`'s `check()` runs first on every command). Add an assert when you change logic.
+4. If you touched `conductor-local.py`, `state.py` or `watch.py`: `python3 -m py_compile` it, and keep its asserts passing (`check_stage()` runs first on `scan`; `check()` in `state.py` and `watch.py` runs first on every command). Add an assert when you change logic.
 
 ## Local and cloud
 

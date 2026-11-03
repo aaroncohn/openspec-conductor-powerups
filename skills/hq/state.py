@@ -21,6 +21,7 @@ Works the same locally and in the cloud: it only touches .context/babysitter.jso
   state.py pause | resume | paused                   `/babysitter:pause` and `/babysitter:keep-going`; pause and resume print
                                                      the sessions to hold or release. No state file: error, not HQ.
   state.py other-hq                                  stdin: as sync-scan; exits non-zero if another Babysitter HQ is open
+  state.py ignored                                   IDs of workspaces marked --monitoring no, for the watcher's --ignore
 """
 import datetime, json, os, sys, tempfile
 
@@ -178,6 +179,12 @@ def resume(state):
     return state.pop("paused", None)
 
 
+def ignored(state):
+    # Cloud rows keep the workspace ID in "session"; local rows, the session. Each watcher's --ignore takes its own.
+    return [w["session"] for w in state["workspaces"].values()
+            if w.get("present", True) and w.get("monitoring") is False and w.get("session")]
+
+
 def table(state):
     rows = [w for n, w in sorted(state["workspaces"].items()) if w.get("present", True) and bare(n) not in QUEUES]
     lines = ["| " + " | ".join(COLUMNS) + " |", "| " + " | ".join("---" for _ in COLUMNS) + " |"]
@@ -257,6 +264,10 @@ def check():
         assert other_hqs(json.dumps({"data": [{"id": "h", "name": "Babysitter HQ", "deepLink": "conductor://x"}]}, indent=2)) == ["Babysitter HQ (conductor://x)"]
         assert other_hqs(json.dumps({"data": [{"id": "h", "name": "Babysitter HQ"}]}), self_id="h") == []
         save(s); assert load()["next"] == s["next"]
+        m = load()
+        workspace_set(m, "m7", session="w7", monitoring="no", present=True); workspace_set(m, "m8", session="w8", monitoring="yes")
+        workspace_set(m, "m9", session="w9", monitoring="no", gone=True); workspace_set(m, "m6", session="w6")
+        assert ignored(m) == ["w7"]
     finally:
         PATH = keep
 
@@ -270,6 +281,8 @@ def main(argv):
     if cmd in ("pause", "resume", "paused") and not os.path.exists(PATH):
         sys.exit(f"no babysitter state here ({PATH}): this isn't Babysitter HQ. Nothing changed; run this in the Babysitter HQ workspace.")
     state = load()
+    if cmd == "ignored":
+        return print(",".join(ignored(state)))
     if cmd == "option" and pos[:1] == ["set"] and len(pos) == 3:
         state["options"][pos[1]] = pos[2]
     elif cmd == "option" and pos[:1] == ["get"]:

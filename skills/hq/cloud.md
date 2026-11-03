@@ -1,6 +1,6 @@
 # babysitter in a Conductor cloud workspace
 
-Read this when `CONDUCTOR_IS_LOCAL` is `0`. Every workspace runs in its own Linux sandbox, so there are no sibling worktrees, no `ListAgents`, and no `SendMessage`. Use the `conductor` CLI instead; it's on the `PATH` in cloud workspaces. These sections replace the one-HQ check and steps 1, 3 and 4 of `SKILL.md`. Everything else applies as written, including what `main` means.
+Read this when `CONDUCTOR_IS_LOCAL` is `0`. Every workspace runs in its own Linux sandbox, so there are no sibling worktrees, no `ListAgents`, and no `SendMessage`. Use the `conductor` CLI instead; it's on the `PATH` in cloud workspaces. These sections replace the one-HQ check, steps 1 and 3, and step 4's watcher in `SKILL.md`; step 4's other rules, its re-scan included, still apply. Everything else applies as written, including what `main` means.
 
 If `conductor` fails with an auth error, tell the user that the workspace has no API token: they can turn on automatic API access in Conductor → Settings → General (it applies to new workspaces) or set their own `CONDUCTOR_API_KEY`. Stop until it works.
 
@@ -28,21 +28,17 @@ Skip this workspace (`$CONDUCTOR_WORKSPACE_ID` if set, otherwise match by name),
 - **In scope:** it ran `/opsx:propose` (or its pushed branch has a change under `openspec/changes/` that isn't archived on `origin/main`) and the change isn't merged yet. Also in scope: it has an open PR, or its session last stopped asking whether to commit, open a PR or merge.
 - **Skipped:** still exploring, already merged and archived, or unrelated. List them as skipped.
 
-Read a session's transcript with `conductor session message`. Messages come oldest first, so page with `--offset` until `hasMore` is false, keep the last message id, and from then on fetch only new ones with `--after <lastMessageId>`. To see what the session last said:
+Read the transcripts with the scan. This is the re-scan from step 4 of `SKILL.md`: run it on every wake, for any reason, before you act, post or restart the watcher.
 
 ```bash
-conductor session message <sessionId> --json --limit 100 --offset <n> | python3 -c '
-import json, sys
-for m in json.load(sys.stdin)["data"]:
-    p = (m.get("content") or {}).get("rawPayload") or {}
-    if m["type"] == "agent" and p.get("type") == "assistant":
-        for c in p["message"].get("content", []):
-            if c.get("type") == "text": print(c["text"])' | tail -20
+python3 <this skill's dir>/watch.py scan "$REPO"
 ```
+
+For each open workspace it prints every new user message and the last few assistant ones. It fetches only what's new (`conductor session message --after <lastMessageId>`, or the end of the transcript the first time), and gives a workspace whose `lastActivityAt` hasn't changed since the last scan one line. It keeps its place in `.context/babysitter-scan.json`. If it says it can't read a workspace, nothing about that workspace is verified: say so in the digest and don't update its row. The CLI doesn't give a workspace's branch, so find its PR from the branch its transcript names (`gh pr list --head <branch> --state all`), or with `gh pr list --search <name>`.
 
 ## 2. The state file
 
-`state.py` works here as written. For the scan, pipe the CLI's list into it: `conductor workspace list --mine --repo "$REPO" --json --limit 100 | python3 <this skill's dir>/state.py sync-scan` (it skips `$CONDUCTOR_WORKSPACE_ID`). The CLI doesn't know stages or PRs, so after each scan set them yourself for anything that changed: `state.py workspace set <name> --stage apply --pr 12`.
+`state.py` works here as written. For the scan, pipe the CLI's list into it: `conductor workspace list --mine --repo "$REPO" --json --limit 100 | python3 <this skill's dir>/state.py sync-scan` (it skips `$CONDUCTOR_WORKSPACE_ID`). The CLI doesn't know stages or PRs, so `sync-scan` keeps the old stage, which may be stale. After each re-scan (section 1), set them yourself for anything that changed: `state.py workspace set <name> --stage apply --pr 12`.
 
 ## Stage in the workspace name
 
@@ -63,50 +59,13 @@ The `Via Babysitter: ` prefix and rules from step 3 still apply. These messages 
 
 ## 4. Watching them
 
-There are no idle notifications in the cloud. Run a watcher in the background (Bash `run_in_background`) and re-start it after each event. It stays quiet until there's something to act on, then exits and prints what: a session finished a turn, a session has been working for 30 minutes with no update, or a new workspace of this repo appeared (it checks every 10 minutes). It notes each session's `updatedAt` when it starts, so a short turn that starts and ends between checks still counts, and a session already sitting idle doesn't fire.
+There are no idle notifications in the cloud. Run the watcher in the background (Bash `run_in_background`) and re-start it after each event. It stays quiet until there's something to act on, then exits and prints what: a session finished a turn, a session has been working for 30 minutes with no update, or (it checks every 10 minutes) a workspace of this repo is new, gone, or has new activity while none of its sessions is being watched. It skips this workspace by itself. `--ignore` is for the workspaces marked `--monitoring no`.
 
 ```bash
-cat > .context/watch.py <<'EOF'
-# Usage: watch.py <repo> [<sessionId> ...]. Prints why and exits when there's something to act on.
-import json, subprocess, sys, time
-repo, sessions = sys.argv[1], sys.argv[2:]
-def cli(*args):
-    r = subprocess.run(["conductor", "--json", *args], capture_output=True, text=True)
-    try:
-        return json.loads(r.stdout)
-    except ValueError:
-        return {}
-def status(s):
-    d = cli("session", "status", s)
-    return d.get("status") or "", d.get("updatedAt") or ""
-def workspaces():
-    return {w["id"]: w["name"] for w in cli("workspace", "list", "--mine", "--repo", repo, "--limit", "100").get("data", [])}
-start = {s: status(s)[1] for s in sessions}
-seen = {s: (start[s], time.time()) for s in sessions}
-known, last_scan = workspaces(), time.time()
-while True:
-    time.sleep(30)
-    for s in sessions:
-        st, updated = status(s)
-        if st and st not in ("working", "queued") and updated != start[s]:
-            sys.exit(print(s, "finished a turn"))
-        if st != "working" or updated != seen[s][0]:
-            seen[s] = (updated, time.time())
-        elif time.time() - seen[s][1] > 30 * 60:
-            sys.exit(print(s, "has been working for 30 minutes with no update"))
-    if time.time() - last_scan > 10 * 60:
-        now, last_scan = workspaces(), time.time()
-        new = [now[w] for w in now if known and w not in known]
-        if new:
-            sys.exit(print("new workspace:", ", ".join(new)))
-        known = now or known
-EOF
-python3 .context/watch.py "$REPO" <sessionId> <sessionId> ...      # run in the background
+python3 <this skill's dir>/watch.py watch "$REPO" --ignore "$(python3 <this skill's dir>/state.py ignored)" <sessionId> <sessionId> ...      # run in the background
 ```
 
-Start it just before you send a message (so the turn it triggers counts), and check sessions that were already idle when you started by reading their transcripts. When it fires, read that session's new messages, check its PR, act, and re-start the watcher for the sessions still in flight.
-
-The watcher can't see a stage change in a workspace you aren't watching (for example, the user just ran `/opsx:propose` there), so give it a background timeout of 30 minutes, or less if the next digest (step 6) is due sooner. When it times out, redo section 1's scan, then rename and adopt as in step 4 of `SKILL.md`. Stay silent if nothing changed.
+Start it just before you send a message (so the turn it triggers counts). Give it a background timeout of 30 minutes at most, and sooner if the next digest (step 6) comes first. Whether it exits or times out, you woke: re-scan (section 1), then act as in step 4 of `SKILL.md`, and re-start the watcher for the sessions still in flight. Stay silent if nothing changed.
 
 If a session stops responding or its workspace is gone, do the step yourself from this sandbox (`git fetch origin <branch>` and work on that branch) and say so in the next digest.
 

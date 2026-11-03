@@ -5,7 +5,8 @@ cd "$(dirname "$0")/.."
 fail() { echo "✗ $1"; exit 1; }
 
 # 1. The scripts compile and their self-tests pass (each runs its asserts first).
-python3 -m py_compile skills/hq/conductor-local.py skills/hq/state.py skills/doctor/doctor.py
+python3 -m py_compile skills/hq/conductor-local.py skills/hq/state.py skills/hq/watch.py skills/doctor/doctor.py
+python3 skills/hq/watch.py check
 BABYSITTER_STATE="$(mktemp -d)/s.json" python3 skills/hq/state.py counts >/dev/null
 python3 -c 'import importlib.util as u, sys; s=u.spec_from_file_location("c","skills/hq/conductor-local.py"); m=u.module_from_spec(s); s.loader.exec_module(m); m.check_stage(); m.check_scan_changes(); m.check_dialog_link()'
 grep -q "'steer'" skills/hq/conductor-local.py || fail "conductor-local.py send must use mode steer (Conductor 0.92 stopped draining queue)"
@@ -28,6 +29,10 @@ grep -q 'Via Babysitter: ' skills/hq/SKILL.md skills/hq/cloud.md || fail "Via Ba
 grep -q 'conductor-local.py new-dialog' skills/new-batch-explore/SKILL.md && grep -q 'conductor-local.py new-dialog' skills/hq/SKILL.md || fail "the Create dialog must open through conductor-local.py new-dialog"
 ! grep -nE 'conductor://(path|prompt)=|open "conductor:' skills/*/SKILL.md || fail "a skill writes a Create dialog link by hand (HQ reused a stale one); use conductor-local.py new-dialog"
 grep -q 'state.py other-hq' skills/hq/SKILL.md && grep -q 'state.py other-hq' skills/hq/cloud.md || fail "babysitter must check for another HQ, locally and in the cloud"
+grep -q 'Re-scan on every wake, before anything else' skills/hq/SKILL.md || fail "HQ must re-scan every workspace on every wake (a cloud HQ showed propose/apply workspaces as explore)"
+grep -q 'Never carry a stage over' skills/hq/SKILL.md || fail "HQ must not trust a stored stage"
+grep -q 'watch.py scan' skills/hq/cloud.md && grep -q 'watch.py watch' skills/hq/cloud.md || fail "cloud HQ must use watch.py for its scan and watcher"
+for f in skills/status-check/SKILL.md skills/keep-going/SKILL.md; do grep -q 'full re-scan' "$f" || fail "$f must use hq's full re-scan"; done
 grep -q 'most recent message starts with "Babysitter is paused."' skills/hq/SKILL.md || fail "the goal must clear on pause, or /goal keeps HQ running"
 grep -q '^Babysitter is paused\.' skills/pause/SKILL.md || fail "pause must post the line the goal's condition looks for"
 for n in hq pause keep-going; do grep -q '^disable-model-invocation: true$' "skills/$n/SKILL.md" || fail "$n must only run when the user types it"; done
