@@ -33,6 +33,8 @@ grep -q 'Re-scan on every wake, before anything else' skills/hq/SKILL.md || fail
 grep -q 'Never carry a stage over' skills/hq/SKILL.md || fail "HQ must not trust a stored stage"
 grep -q 'watch.py scan' skills/hq/cloud.md && grep -q 'watch.py watch' skills/hq/cloud.md || fail "cloud HQ must use watch.py for its scan and watcher"
 for f in skills/status-check/SKILL.md skills/keep-going/SKILL.md; do grep -q 'full re-scan' "$f" || fail "$f must use hq's full re-scan"; done
+grep -q 'READY TO MERGE: #<pr>' skills/hq/SKILL.md && grep -q 'your turn to merge' skills/hq/SKILL.md && grep -q 'your turn to merge' skills/keep-going/SKILL.md || fail "merges go one at a time through HQ's merge lock"
+grep -q 'waiting to merge (#' skills/hq/examples/digest.md || fail "digest example lacks the merge line"
 grep -q 'most recent message starts with "Babysitter is paused."' skills/hq/SKILL.md || fail "the goal must clear on pause, or /goal keeps HQ running"
 grep -q '^Babysitter is paused\.' skills/pause/SKILL.md || fail "pause must post the line the goal's condition looks for"
 for n in hq pause keep-going; do grep -q '^disable-model-invocation: true$' "skills/$n/SKILL.md" || fail "$n must only run when the user types it"; done

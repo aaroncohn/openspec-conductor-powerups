@@ -6,7 +6,7 @@ A Claude Code plugin, `babysitter`, with opinionated skills for people who use O
 
 - `.claude-plugin/plugin.json`: the plugin. `name` is `babysitter`. No `version`, on purpose.
 - `.claude-plugin/marketplace.json`: the marketplace, also `babysitter`, with one plugin at `./`.
-- `skills/<name>/SKILL.md`: one skill each. `cloud.md` beside it holds the cloud steps. `skills/hq/conductor-local.py` holds babysitter's local, deterministic steps (scan, send, watch); `skills/hq/state.py` keeps its state file (IDs, workspace table, counts) and works locally and in the cloud. `skills/hq/watch.py` is the cloud watcher and re-scan. `skills/doctor/doctor.py` is the read-only health check.
+- `skills/<name>/SKILL.md`: one skill each. `cloud.md` beside it holds the cloud steps. `skills/hq/conductor-local.py` holds babysitter's local, deterministic steps (scan, send, watch); `skills/hq/state.py` keeps its state file (IDs, workspace table, counts, merge lock) and works locally and in the cloud. `skills/hq/watch.py` is the cloud watcher and re-scan. `skills/doctor/doctor.py` is the read-only health check.
 
 ## Releases
 

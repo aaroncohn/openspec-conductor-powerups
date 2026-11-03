@@ -22,6 +22,12 @@ Works the same locally and in the cloud: it only touches .context/babysitter.jso
                                                      the sessions to hold or release. No state file: error, not HQ.
   state.py other-hq                                  stdin: as sync-scan; exits non-zero if another Babysitter HQ is open
   state.py ignored                                   IDs of workspaces marked --monitoring no, for the watcher's --ignore
+  state.py merge ready <workspace> --pr <n>          stdin: the PR's files (gh pr diff <n> --name-only); joins the line
+  state.py merge next                                free lock: gives it to the next in line (most overlap first, then
+                                                     oldest) and prints who; otherwise prints nothing to do
+  state.py merge release <workspace>                 merged, failed or passed over: frees the lock or leaves the line
+  state.py merge prodded                             note that the lock's holder has had its one prod
+  state.py merge show                                the holder, how long it's held the lock, and the line
 """
 import datetime, json, os, sys, tempfile
 
@@ -175,8 +181,74 @@ def pause(state):
 
 
 def resume(state):
-    # Returns what pause() stored, or None if not paused.
-    return state.pop("paused", None)
+    # Returns what pause() stored, or None if not paused. The pause doesn't count against the merge lock's holder.
+    was = state.pop("paused", None)
+    h = merge_state(state)["holder"]
+    if was and h:
+        h.update(since=now(), prodded=False)
+    return was
+
+
+def merge_state(state):
+    return state.setdefault("merge", {"holder": None, "queue": []})
+
+
+def merge_line(state):
+    # The change the others overlap with goes first, so they rebase once, onto it. A tie stays oldest-ready first.
+    q = merge_state(state)["queue"]
+    overlap = lambda a: sum(1 for b in q if b is not a and set(a["files"]) & set(b["files"]))
+    return sorted(q, key=lambda a: -overlap(a))
+
+
+def merge_ready(state, name, pr, files):
+    m = merge_state(state)
+    if m["holder"] and bare(m["holder"]["name"]) == bare(name):
+        return
+    for e in m["queue"]:
+        if bare(e["name"]) == bare(name):
+            e.update(name=name, pr=pr, files=files)
+            return
+    m["queue"].append({"name": name, "pr": pr, "files": files, "ready": now()})
+
+
+def merge_next(state):
+    # Returns the new holder, or None if the lock is taken or nobody's waiting.
+    m = merge_state(state)
+    line = merge_line(state)
+    if m["holder"] or not line:
+        return None
+    m["queue"].remove(line[0])
+    m["holder"] = {**line[0], "since": now(), "prodded": False}
+    return m["holder"]
+
+
+def merge_release(state, name):
+    m = merge_state(state)
+    if m["holder"] and bare(m["holder"]["name"]) == bare(name):
+        m["holder"] = None
+    m["queue"] = [e for e in m["queue"] if bare(e["name"]) != bare(name)]
+
+
+def merge_show(state):
+    m = merge_state(state)
+    h = m["holder"]
+    out = []
+    if h:
+        held = (datetime.datetime.now().astimezone() - datetime.datetime.fromisoformat(h["since"])).total_seconds() // 60
+        out.append(f"holder: {h['name']} #{h['pr']}, {held:.0f} min, prodded: {'yes' if h['prodded'] else 'no'}")
+    for i, e in enumerate(merge_line(state), 1):
+        out.append(f"#{i} in line: {e['name']} #{e['pr']}, ready since {e['ready']}")
+    return "\n".join(out)
+
+
+def merge_progress(state, name):
+    m = merge_state(state)
+    if m["holder"] and bare(m["holder"]["name"]) == bare(name):
+        return "merging (its turn)"
+    for i, e in enumerate(merge_line(state), 1):
+        if bare(e["name"]) == bare(name):
+            return f"waiting to merge (#{i} in line)"
+    return None
 
 
 def ignored(state):
@@ -191,7 +263,7 @@ def table(state):
     for w in rows:
         pr = f" (#{w['pr']})" if w.get("pr") else ""
         lines.append("| " + " | ".join([
-            w["name"] + pr, w.get("stage") or "", w.get("effort") or "", w.get("progress") or "",
+            w["name"] + pr, w.get("stage") or "", w.get("effort") or "", merge_progress(state, w["name"]) or w.get("progress") or "",
             w.get("next") or "", w.get("eta") or "", "x" if w.get("monitoring") else ""]) + " |")
     if not rows:
         lines.append("| (no other open workspaces) |" + " |" * (len(COLUMNS) - 1))
@@ -209,6 +281,8 @@ def bare(name):
 def show(state):
     out = ([f"PAUSED since {state['paused']['since']}: do nothing on your own until `/babysitter:keep-going`", ""] if state.get("paused") else []) + ["options: " + (", ".join(f"{k}={v}" for k, v in sorted(state["options"].items())) or "(none)"),
            "last digest: " + (state["digests"][-1] if state["digests"] else "(none)"), "", table(state), "", counts(state)]
+    if merge_show(state):
+        out += ["", "merge lock:", merge_show(state)]
     for item_id, it in open_items(state):
         out.append(f"- {item_id} · {it['title']} · {it['grade']}" + (f" · from {it['workspace']}" if it["workspace"] else ""))
     waiting = [w for w in state["workspaces"].values() if w.get("present", True) and w.get("waiting")]
@@ -265,6 +339,27 @@ def check():
         assert other_hqs(json.dumps({"data": [{"id": "h", "name": "Babysitter HQ"}]}), self_id="h") == []
         save(s); assert load()["next"] == s["next"]
         m = load()
+        assert merge_next(m) is None and merge_show(m) == ""                    # nobody's waiting
+        merge_ready(m, "apply-a", "1", ["x.py"])
+        merge_ready(m, "apply-b", "2", ["y.py", "z.py"])
+        merge_ready(m, "apply-c", "3", ["y.py"])
+        merge_ready(m, "apply-a", "1", ["x.py"])                                # saying it twice doesn't move it
+        assert [e["name"] for e in merge_line(m)] == ["apply-b", "apply-c", "apply-a"]  # overlap first, then oldest
+        assert merge_next(m)["name"] == "apply-b" and merge_next(m) is None     # one at a time
+        merge_ready(m, "apply-b", "2", ["y.py"])                                # the holder doesn't rejoin the line
+        assert merge_progress(m, "apply-b") == "merging (its turn)" and merge_progress(m, "apply-c") == "waiting to merge (#2 in line)"
+        workspace_set(m, "apply-c", progress="tests pass", present=True)
+        assert "| waiting to merge (#2 in line) |" in table(m) and "tests pass" not in table(m)
+        assert "holder: apply-b #2, 0 min, prodded: no" in show(m) and "#1 in line: apply-a #1" in show(m)
+        m["merge"]["holder"].update(since="2000-01-01T00:00+00:00", prodded=True)
+        assert ", prodded: yes" in merge_show(m) and ", 0 min" not in merge_show(m)
+        pause(m); resume(m)                                                      # a pause doesn't use up the 45 minutes
+        assert ", 0 min, prodded: no" in merge_show(m)
+        merge_release(m, "apply-b")
+        assert merge_next(m)["name"] == "apply-a"
+        merge_release(m, "apply-c")                                              # one in line can drop out too
+        assert merge_line(m) == [] and merge_progress(m, "apply-c") is None
+        assert merge_progress(m, "archive-a") == "merging (its turn)"            # a rename is the same workspace
         workspace_set(m, "m7", session="w7", monitoring="no", present=True); workspace_set(m, "m8", session="w8", monitoring="yes")
         workspace_set(m, "m9", session="w9", monitoring="no", gone=True); workspace_set(m, "m6", session="w6")
         assert ignored(m) == ["w7"]
@@ -283,6 +378,8 @@ def main(argv):
     state = load()
     if cmd == "ignored":
         return print(",".join(ignored(state)))
+    if cmd == "merge" and pos[:1] == ["show"]:
+        return print(merge_show(state) or "free, nobody waiting")
     if cmd == "option" and pos[:1] == ["set"] and len(pos) == 3:
         state["options"][pos[1]] = pos[2]
     elif cmd == "option" and pos[:1] == ["get"]:
@@ -306,6 +403,16 @@ def main(argv):
     elif cmd == "workspace" and pos[:1] == ["set"] and len(pos) == 2:
         workspace_set(state, pos[1], **{k: opts[k] for k in opts if k in
                       ("stage", "effort", "progress", "next", "eta", "monitoring", "pr", "waiting", "gone", "path", "session")})
+    elif cmd == "merge" and pos[:1] == ["ready"] and len(pos) == 2 and "pr" in opts:
+        merge_ready(state, pos[1], opts["pr"], [f for f in sys.stdin.read().split("\n") if f])
+    elif cmd == "merge" and pos == ["next"]:
+        h = merge_next(state)
+        print(f"{h['name']}\t#{h['pr']}" if h else "nothing to do: the lock is taken or nobody's waiting")
+    elif cmd == "merge" and pos[:1] == ["release"] and len(pos) == 2:
+        merge_release(state, pos[1])
+    elif cmd == "merge" and pos == ["prodded"]:
+        if merge_state(state)["holder"]:
+            merge_state(state)["holder"]["prodded"] = True
     elif cmd == "sync-scan":
         print("\n".join(sync_scan(state, sys.stdin.read(), self_path=".", self_id=os.environ.get("CONDUCTOR_WORKSPACE_ID"))))
     elif cmd == "table":
