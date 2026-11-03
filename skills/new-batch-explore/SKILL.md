@@ -5,7 +5,7 @@ description: Pick the next 2–5 roadmap milestones that can be worked in parall
 
 # new-batch-explore
 
-Runs inside a Conductor workspace. Locally, it creates sibling **local** workspaces through Conductor's `conductor://new` deep link, which opens the Create dialog pre-filled; the user presses Enter once per workspace.
+Runs inside a Conductor workspace. Locally, it creates sibling **local** workspaces through Conductor's `conductor://path=...&prompt=...` deep link, which opens the Create dialog pre-filled; the user presses Enter once per workspace.
 
 **Cloud:** if `CONDUCTOR_IS_LOCAL` is `0`, it creates **cloud** workspaces directly with the `conductor` CLI. Read `cloud.md` (next to this file) and use it for steps 2, 4 and 5. Steps 1 and 3 are the same.
 
@@ -86,10 +86,12 @@ Fire them **one at a time** — the Create dialog has a single shared draft, so 
 ENC=$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read()))' <<< "$PROMPT")
 ENC_ROOT=$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$ROOT")
 BEFORE=$(sqlite3 "$DB" "select count(*) from workspaces where repository_id=(select id from repos where root_path='$SQL_ROOT')")
-# The Create dialog follows the organization switcher at the top left, not this link: on a cloud organization it
-# makes a cloud workspace on that organization's last repo. Run `conductor-local.py org` (in the hq skill)
+# The Create dialog opens in the organization the switcher at the top left is on: on a cloud organization it makes
+# a cloud workspace, and path can't select this local repo. Run `conductor-local.py org` (in the hq skill)
 # first; if it says cloud, ask the user to switch to the organization that shows this repo, and wait.
-open "conductor://new?path=$ENC_ROOT&prompt=$ENC"
+# Keep this exact form: Conductor reads the text after conductor:// as key=value pairs, so anything before path= hides it,
+# and a path it can't match keeps whatever repo the dialog last had, with no error.
+open "conductor://path=$ENC_ROOT&prompt=$ENC"
 # then poll until a new row appears (give the user up to ~3 minutes)
 for i in $(seq 1 90); do
   sleep 2
@@ -108,7 +110,7 @@ sqlite3 "$DB" "update workspaces set workspace_name='$NAME', user_set_workspace_
 
 About a minute later, check `workspace_name` again and set it once more if the namer overwrote it. The branch keeps the namer's name; that's fine.
 
-Tell the user before the first link: "Conductor will pop a Create dialog for each one — press **Enter** to create it, and I'll queue the next." If the poll times out, ask whether they pressed Enter rather than firing the next link.
+Tell the user before the first link: "Conductor will pop a Create dialog for each one — check it says Local and `<repo>`, then press **Enter** to create it, and I'll queue the next." If the poll times out, ask whether they pressed Enter and which repo the dialog showed, rather than firing the next link.
 
 Do not name a shell variable `path` — zsh ties it to `PATH`.
 

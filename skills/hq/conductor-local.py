@@ -73,9 +73,9 @@ def is_working(db, session_id):
 
 
 def org():
-    # The app's Create dialog (conductor://new) creates the workspace in the organization the switcher at the
-    # top left is on, whatever path the link names. On a cloud organization that means a cloud workspace on
-    # that organization's last repo. Say which it is before opening a dialog.
+    # The app's Create dialog (conductor://path=...) creates the workspace in the organization the switcher at
+    # the top left is on. On a cloud organization that means a cloud workspace, and the link's path can't
+    # select a local repo. Say which it is before opening a dialog.
     path = os.path.join(os.path.dirname(DB), "local-storage.subsystem.active-organization.json")
     try:
         active = next(iter(json.load(open(path)).values())).strip('"')
