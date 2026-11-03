@@ -53,7 +53,7 @@ The skills are then `/babysitter:hq`, `/babysitter:new-batch-explore`, and so on
 "enabledPlugins": { "babysitter@babysitter": true }
 ```
 
-Without auto-update, run `/plugin marketplace update babysitter`.
+A session that's already open keeps the version it loaded, so after an update run `/reload-plugins` in it or start a new one. To update right now, or without auto-update: `claude plugin marketplace update babysitter && claude plugin update babysitter@babysitter`. `/babysitter:doctor` tells you if you're behind.
 
 **For cloud workspaces**, a cloud sandbox can't see your Mac's plugins, so install the plugin when each workspace is created. Add the `extraKnownMarketplaces` and `enabledPlugins` entries above to your repo's `.claude/settings.json`, and put this in the repository's **Setup script in your organization's cloud settings** (Conductor: switch to the cloud organization at the top left, open the Cloud Computer / organization settings, the repository, Setup script):
 

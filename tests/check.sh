@@ -7,7 +7,7 @@ fail() { echo "✗ $1"; exit 1; }
 # 1. The scripts compile and their self-tests pass (each runs its asserts first).
 python3 -m py_compile skills/hq/conductor-local.py skills/hq/state.py skills/doctor/doctor.py
 BABYSITTER_STATE="$(mktemp -d)/s.json" python3 skills/hq/state.py counts >/dev/null
-python3 -c 'import importlib.util as u, sys; s=u.spec_from_file_location("c","skills/hq/conductor-local.py"); m=u.module_from_spec(s); s.loader.exec_module(m); m.check_stage(); m.check_scan_changes()'
+python3 -c 'import importlib.util as u, sys; s=u.spec_from_file_location("c","skills/hq/conductor-local.py"); m=u.module_from_spec(s); s.loader.exec_module(m); m.check_stage(); m.check_scan_changes(); m.check_dialog_link()'
 grep -q "'steer'" skills/hq/conductor-local.py || fail "conductor-local.py send must use mode steer (Conductor 0.92 stopped draining queue)"
 echo "✓ scripts compile and self-tests pass"
 
@@ -25,7 +25,8 @@ grep -q 'Via Babysitter: ' skills/hq/SKILL.md skills/hq/cloud.md || fail "Via Ba
 ! grep -rnE '[^`/]/opsx:propose[^`]' skills/*/SKILL.md skills/*/cloud.md skills/*/examples/*.md || fail "a user-facing /opsx:propose is not in backticks (Conductor cuts it at the colon)"
 ! grep -n 'conductor workspace create' skills/*/cloud.md | grep -v -- '--repo-url' || fail "a conductor workspace create without --repo-url (the CLI guesses the project otherwise)"
 ! grep -rn --exclude-dir=__pycache__ 'conductor://new' skills/ README.md || fail "conductor://new loses the path (Conductor reads the key as new?path), so the dialog opens on the wrong repo; use conductor://path=...&prompt=..."
-grep -qF 'open "conductor://path=$ENC_ROOT&prompt=$ENC"' skills/new-batch-explore/SKILL.md || fail "new-batch-explore must open the Create dialog with path first, right after conductor://"
+grep -q 'conductor-local.py new-dialog' skills/new-batch-explore/SKILL.md && grep -q 'conductor-local.py new-dialog' skills/hq/SKILL.md || fail "the Create dialog must open through conductor-local.py new-dialog"
+! grep -nE 'conductor://(path|prompt)=|open "conductor:' skills/*/SKILL.md || fail "a skill writes a Create dialog link by hand (HQ reused a stale one); use conductor-local.py new-dialog"
 grep -q 'state.py other-hq' skills/hq/SKILL.md && grep -q 'state.py other-hq' skills/hq/cloud.md || fail "babysitter must check for another HQ, locally and in the cloud"
 grep -q 'most recent message starts with "Babysitter is paused."' skills/hq/SKILL.md || fail "the goal must clear on pause, or /goal keeps HQ running"
 grep -q '^Babysitter is paused\.' skills/pause/SKILL.md || fail "pause must post the line the goal's condition looks for"

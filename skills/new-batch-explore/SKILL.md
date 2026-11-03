@@ -5,7 +5,7 @@ description: Pick the next 2–5 roadmap milestones that can be worked in parall
 
 # new-batch-explore
 
-Runs inside a Conductor workspace. Locally, it creates sibling **local** workspaces through Conductor's `conductor://path=...&prompt=...` deep link, which opens the Create dialog pre-filled; the user presses Enter once per workspace.
+Runs inside a Conductor workspace. Locally, it creates sibling **local** workspaces through Conductor's deep link, which opens the Create dialog pre-filled; the user presses Enter once per workspace.
 
 **Cloud:** if `CONDUCTOR_IS_LOCAL` is `0`, it creates **cloud** workspaces directly with the `conductor` CLI. Read `cloud.md` (next to this file) and use it for steps 2, 4 and 5. Steps 1 and 3 are the same.
 
@@ -80,39 +80,25 @@ Then ask the open decisions **one at a time**, starting with the one the others 
 After the last decision is answered, summarize every decision in one table and end with: "Next step: run `/opsx:propose` to draft this into a proposal." Write slash commands in backticks, as here, so the chat shows the whole command. Don't create the change or write its artifacts from explore mode, and don't ask whether to; `/opsx:propose` does that.
 ```
 
-Fire them **one at a time** — the Create dialog has a single shared draft, so a second link before Enter would overwrite the first:
+Open them **one at a time**: the Create dialog has one shared draft, and a second link before Enter closes the dialog. Write each prompt to a file, then run this, which opens the dialog on this repo and waits up to 3 minutes for Enter, so give the shell call that long. Never write a `conductor://` link by hand.
 
 ```bash
-ENC=$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read()))' <<< "$PROMPT")
-ENC_ROOT=$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$ROOT")
-BEFORE=$(sqlite3 "$DB" "select count(*) from workspaces where repository_id=(select id from repos where root_path='$SQL_ROOT')")
-# The Create dialog opens in the organization the switcher at the top left is on: on a cloud organization it makes
-# a cloud workspace, and path can't select this local repo. Run `conductor-local.py org` (in the hq skill)
-# first; if it says cloud, ask the user to switch to the organization that shows this repo, and wait.
-# Keep this exact form: Conductor reads the text after conductor:// as key=value pairs, so anything before path= hides it,
-# and a path it can't match keeps whatever repo the dialog last had, with no error.
-open "conductor://path=$ENC_ROOT&prompt=$ENC"
-# then poll until a new row appears (give the user up to ~3 minutes)
-for i in $(seq 1 90); do
-  sleep 2
-  NOW=$(sqlite3 "$DB" "select count(*) from workspaces where repository_id=(select id from repos where root_path='$SQL_ROOT')")
-  [ "$NOW" -gt "$BEFORE" ] && break
-done
+python3 <this skill's dir>/../hq/conductor-local.py new-dialog .context/explore-{id}.md
 ```
+
+It prints the new workspace as JSON (`id`, `path`, `session`). If it exits with an error, nothing was created on this repo: show the user the message and sort that out before the next one.
 
 Conductor's namer ignores names in the prompt and picks its own (e.g. "Milestone 10 Alerts Explore"). Once the new row appears, set the name the way a manual rename in the sidebar does. This writes to Conductor's own database, which is undocumented, so back it up once before the first workspace (`sqlite3 "$DB" ".backup '$HOME/conductor-backups/conductor-<timestamp>.db'"`, after `mkdir -p ~/conductor-backups`):
 
 ```bash
 NAME="m{id}-{short-name}"
-WS=$(sqlite3 "$DB" "select local_id from workspaces where repository_id=(select id from repos where root_path='$SQL_ROOT') order by created_at desc limit 1")
+WS="<the id it printed>"
 sqlite3 "$DB" "update workspaces set workspace_name='$NAME', user_set_workspace_name=1 where local_id='$WS'"
 ```
 
 About a minute later, check `workspace_name` again and set it once more if the namer overwrote it. The branch keeps the namer's name; that's fine.
 
-Tell the user before the first link: "Conductor will pop a Create dialog for each one — check it says Local and `<repo>`, then press **Enter** to create it, and I'll queue the next." If the poll times out, ask whether they pressed Enter and which repo the dialog showed, rather than firing the next link.
-
-Do not name a shell variable `path` — zsh ties it to `PATH`.
+Tell the user before the first dialog: "Conductor will pop a Create dialog for each one — check it says Local and `<repo>`, then press **Enter** to create it, and I'll queue the next."
 
 ## 5. Report
 

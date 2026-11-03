@@ -12,10 +12,12 @@ be open. Back up first:  sqlite3 "$CONDUCTOR_DB_PATH" ".backup '<file>'"
                                                        mid-turn), and wait up to 5 minutes for Conductor to deliver it
   conductor-local.py org                               the organization the app is switched to, and whether it's the
                                                        cloud one (the Create dialog follows it; see SKILL.md step 9)
+  conductor-local.py new-dialog <prompt file>          open the Create dialog on this repo with that prompt, wait up to 3
+                                                       minutes for the user to press Enter, print the new workspace as JSON
   conductor-local.py watch [<session id> ...]         block until there's something to act on (see watch())
   conductor-local.py scan                              one JSON line per open workspace of this repo (read-only)
 """
-import datetime, glob, json, os, sqlite3, subprocess, sys, time, uuid
+import datetime, glob, json, os, sqlite3, subprocess, sys, time, urllib.parse, uuid
 
 DB = os.environ.get("CONDUCTOR_DB_PATH") or os.path.expanduser(
     "~/Library/Application Support/com.conductor.app/conductor.db")
@@ -72,7 +74,7 @@ def is_working(db, session_id):
     return (db.execute("select status from sessions where id = ?", (session_id,)).fetchone() or [""])[0] == "working"
 
 
-def org():
+def org_status():
     # The app's Create dialog (conductor://path=...) creates the workspace in the organization the switcher at
     # the top left is on. On a cloud organization that means a cloud workspace, and the link's path can't
     # select a local repo. Say which it is before opening a dialog.
@@ -80,18 +82,62 @@ def org():
     try:
         active = next(iter(json.load(open(path)).values())).strip('"')
     except (OSError, ValueError, StopIteration):
-        return print("unknown: can't read the app's active organization")
+        return "unknown: can't read the app's active organization"
     cloud = out(["conductor", "auth", "whoami", "--json"], ".")
     cloud_id = ""
     for line in cloud.splitlines():
         if line.startswith("Organization ID"):
             cloud_id = line.split()[-1]
     if cloud_id and active == cloud_id:
-        print(f"cloud: the app is switched to your cloud organization ({active}); a Create dialog will make a cloud workspace")
-    elif cloud_id:
-        print(f"local: the app is switched to {active}, not the cloud organization")
-    else:
-        print(f"unknown: the app is switched to {active}; couldn't tell whether that's the cloud organization (conductor CLI not logged in)")
+        return f"cloud: the app is switched to your cloud organization ({active}); a Create dialog will make a cloud workspace"
+    if cloud_id:
+        return f"local: the app is switched to {active}, not the cloud organization"
+    return f"unknown: the app is switched to {active}; couldn't tell whether that's the cloud organization (conductor CLI not logged in)"
+
+
+def dialog_link(root, prompt):
+    # Conductor reads the text after the scheme as key=value pairs split on &, so path= must come right after
+    # it: anything in front (like a made-up route) hides the path, and the dialog silently keeps its last repo.
+    return f"conductor://path={urllib.parse.quote(root)}&prompt={urllib.parse.quote(prompt)}"
+
+
+def check_dialog_link():
+    prompt = "/opsx:explore 1 & 2: a|b\n\"x\" 100% it's"
+    link = dialog_link("/Users/jane/My Code/app's", prompt)
+    # The way Conductor 0.92 parses it.
+    pairs = dict(p.split("=", 1) for p in link.removeprefix("conductor://").split("&"))
+    assert urllib.parse.unquote(pairs["path"]) == "/Users/jane/My Code/app's"
+    assert urllib.parse.unquote(pairs["prompt"]) == prompt
+
+
+def new_dialog(prompt_file):
+    prompt = open(prompt_file).read().strip()
+    if not prompt:
+        sys.exit(f"{prompt_file} is empty")
+    root = os.environ.get("CONDUCTOR_ROOT_PATH") or os.path.dirname(
+        out(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], ".").strip())
+    root = root.rstrip("/")
+    db = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
+    repo = db.execute("select id from repos where rtrim(root_path, '/') = ?", (root,)).fetchone()
+    if not repo:
+        sys.exit(f"{root} isn't a repo in Conductor's database, so the dialog would open on another repo; nothing opened")
+    status = org_status()
+    if status.startswith("cloud"):
+        sys.exit(f"{status}. Ask the user to switch to the organization that shows this repo; nothing opened")
+    query = "select local_id, workspace_path, active_session_id, repository_id from workspaces"
+    seen = {r[0] for r in db.execute(query)}
+    subprocess.run(["open", dialog_link(root, prompt)], check=True)
+    elsewhere = {}
+    for _ in range(90):
+        time.sleep(2)
+        for local_id, path, session_id, repo_id in db.execute(query):
+            if local_id in seen:
+                continue
+            if repo_id == repo[0]:
+                return print(json.dumps({"id": local_id, "path": path, "session": session_id}))
+            elsewhere[local_id] = path
+    sys.exit("no new workspace on this repo after 3 minutes; ask whether the user pressed Enter and which repo the dialog showed"
+             + (f". New on other repos, maybe from this dialog: {', '.join(elsewhere.values())}" if elsewhere else ""))
 
 
 def watch(session_ids):
@@ -246,7 +292,10 @@ if __name__ == "__main__":
     elif cmd == "send" and len(args) in (2, 3) and all(a == "--now" for a in args[2:]):
         send(args[0], args[1], now_flag=len(args) == 3)
     elif cmd == "org" and not args:
-        org()
+        print(org_status())
+    elif cmd == "new-dialog" and len(args) == 1:
+        check_dialog_link()
+        new_dialog(*args)
     elif cmd == "watch":
         check_scan_changes()
         watch(args)

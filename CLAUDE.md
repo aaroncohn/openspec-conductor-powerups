@@ -10,7 +10,7 @@ A Claude Code plugin, `babysitter`, with opinionated skills for people who use O
 
 ## Releases
 
-Every commit to `main` is a release. Users with auto-update get it right away, so `main` must always work. Test before merging.
+Every commit to `main` is a release. Users with auto-update get it the next time a session starts (open sessions keep their version until `/reload-plugins`), so `main` must always work. Test before merging.
 
 Never add a `version` to plugin.json. Never rename the plugin (`babysitter`) without a `renames` entry in marketplace.json. Don't rename the marketplace (`babysitter`): `renames` doesn't cover it, so every install would have to remove it and add it again.
 
