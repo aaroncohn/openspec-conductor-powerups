@@ -149,7 +149,7 @@ def check_cloud(latest_date):
     installed_at = max((i[4] for i in plugin_versions()), default="")
     if me and installed_at and installed_at > (me.get("createdAt") or "") and (me.get("createdAt") or ""):
         add("⛔", "installed after this workspace was created", f"workspace {me['createdAt'][:16]}, plugin {installed_at[:16]}",
-            "the cloud Setup script didn't install the plugin, so a workspace's first session doesn't see it (a SessionStart hook installed it later). Put the install line in the repository's Setup script in your organization's cloud settings; .conductor/settings.toml's setup is local-only. Until then, start a second session in each new workspace")
+            "the plugin was installed after this workspace's first session started, by a SessionStart hook or by a Setup script that failed or was still running. Make sure the repository's Setup script in your organization's cloud settings has the install line (.conductor/settings.toml's setup is local-only); if it already does, check that script's output in a fresh workspace for errors or slowness. Meanwhile, type the full `/babysitter:…` name, which works even when the picker doesn't list it; the picker catches up after a few sessions")
     report_queues([w.get("name", "") for w in data])
     if latest_date:
         stale = [w.get("name", "?") for w in data if (w.get("createdAt") or w.get("created_at") or "") < latest_date
