@@ -61,7 +61,7 @@ A session that's already open keeps the version it loaded, so after an update ru
 claude plugin marketplace add aaroncohn/babysitter --scope project && claude plugin install babysitter@babysitter --scope project
 ```
 
-Cloud workspaces don't run the `[scripts] setup` in `.conductor/settings.toml`; that one is local-only ([Conductor's docs](https://www.conductor.build/docs/cloud/environment-variables): "Cloud workspaces run the repository's Setup script from organization settings"). A `SessionStart` hook that runs the same install is a good backup, but it lands after the first session's command list is built: in that session `/babysitter:` won't show in the picker until you start a second session. Every new workspace then gets the latest version.
+Cloud workspaces don't run the `[scripts] setup` in `.conductor/settings.toml`; that one is local-only ([Conductor's docs](https://www.conductor.build/docs/cloud/environment-variables): "Cloud workspaces run the repository's Setup script from organization settings"). A `SessionStart` hook that runs the same install is a good backup, but it lands after the first session's command list is built: the picker may not list `/babysitter:` for the first few sessions; typing the full name works meanwhile. Every new workspace then gets the latest version.
 
 ## Local vs cloud
 
