@@ -24,6 +24,8 @@ grep -q '^| workspace | stage | effort | progress | next step | ETA | babysitter
 grep -q 'Via Babysitter: ' skills/hq/SKILL.md skills/hq/cloud.md || fail "Via Babysitter prefix missing"
 ! grep -rnE '[^`/]/opsx:propose[^`]' skills/*/SKILL.md skills/*/cloud.md skills/*/examples/*.md || fail "a user-facing /opsx:propose is not in backticks (Conductor cuts it at the colon)"
 ! grep -n 'conductor workspace create' skills/*/cloud.md | grep -v -- '--repo-url' || fail "a conductor workspace create without --repo-url (the CLI guesses the project otherwise)"
+! grep -rn --exclude-dir=__pycache__ 'conductor://new' skills/ README.md || fail "conductor://new loses the path (Conductor reads the key as new?path), so the dialog opens on the wrong repo; use conductor://path=...&prompt=..."
+grep -qF 'open "conductor://path=$ENC_ROOT&prompt=$ENC"' skills/new-batch-explore/SKILL.md || fail "new-batch-explore must open the Create dialog with path first, right after conductor://"
 grep -q 'state.py other-hq' skills/hq/SKILL.md && grep -q 'state.py other-hq' skills/hq/cloud.md || fail "babysitter must check for another HQ, locally and in the cloud"
 grep -q 'most recent message starts with "Babysitter is paused."' skills/hq/SKILL.md || fail "the goal must clear on pause, or /goal keeps HQ running"
 grep -q '^Babysitter is paused\.' skills/pause/SKILL.md || fail "pause must post the line the goal's condition looks for"
