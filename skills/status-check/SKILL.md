@@ -15,7 +15,11 @@ Times are in the user's timezone, as in babysitter ("4:10 pm EST"), never UTC.
 
 ## In Babysitter HQ
 
-Post a digest now, exactly as babysitter's step 6 describes it: what happened, waiting on you, working on now with estimates, the critical path, the open counts with their IDs, the workspace table, and when the next scheduled digest is due. First do the full re-scan from hq's step 4, the same one every wake runs: all open workspaces, read from their newest messages, never a stage carried over from the state file. Don't shorten it because it was asked for: the table is the point. Doesn't reset the digest clock. If `state.py paused` says it's paused, open with "Paused since <time>." and leave out the next digest's time.
+Read hq's step 4 ("Re-scan on every wake") and step 6 in `<this skill's dir>/../hq/SKILL.md` first: in a long run they fade. Then:
+
+1. Do the full re-scan from hq's step 4, the same one every wake runs: all open workspaces, read from their newest messages, never a stage carried over from the state file.
+2. **Take over every workspace on the `ADOPT NOW` line** (from `sync-scan` locally, `watch.py scan` in the cloud, or `state.py adopt`): each one whose user ran `/opsx:propose` or later that babysitter isn't driving yet, as in hq's step 4. Do it now, before posting, not "once it proposes". Then read and decide each workspace on the `CHECK NOW` line after it (an offer to start `/opsx:propose` the user answered, or `/opsx:apply` named), as in hq's step 4.
+3. Post a digest from `python3 <this skill's dir>/../hq/state.py digest`, exactly as babysitter's step 6 describes it: what happened (including what you just took over), waiting on you, working on now with estimates, the critical path, the open counts with their IDs, the workspace table, and when the next scheduled digest is due. Don't shorten it because it was asked for: the table is the point. Doesn't reset the digest clock. If `state.py paused` says it's paused, open with "Paused since <time>." and leave out the next digest's time.
 
 ## In Open Actions, Open Decisions or Open Tests
 

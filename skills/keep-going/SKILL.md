@@ -8,11 +8,11 @@ disable-model-invocation: true
 
 1. Run `python3 <this skill's dir>/../hq/state.py resume` from this workspace's root. If it errors, this isn't Babysitter HQ: pass on what it said, change nothing, and stop. If it says not paused, say so and stop. Otherwise it lists the sessions to release, one per line: name, then session.
 2. Read `<this skill's dir>/../hq/SKILL.md` (and `cloud.md` beside it if `CONDUCTOR_IS_LOCAL` is `0`), then `state.py show` and `.context/babysitter-notes.md`. This may be a new or compacted session, and those rules apply again from here.
-3. Catch up on the pause: update this workspace to the latest `main`, do the full re-scan from hq's step 4 (all open workspaces, read from their newest messages) into `state.py sync-scan`, check each held session's PR, and read the queues for answers that came back. Handle those answers (hq step 9), rename what changed stage, and adopt what's new (step 4).
+3. Catch up on the pause: update this workspace to the latest `main`, do the full re-scan from hq's step 4 (all open workspaces, read from their newest messages) into `state.py sync-scan`, check each held session's PR, and read the queues for answers that came back. Handle those answers (hq step 9), rename what changed stage, and take over every workspace on the `ADOPT NOW` line and decide each on the `CHECK NOW` line (step 4).
 4. Start the watcher (step 4), then send each released session, plus any other you held:
 
    > Via Babysitter: resumed. Carry on from where you stopped, with the same rules as before; merging to `main` is approved, still one at a time: wait for `Via Babysitter: your turn to merge`.
 
    Add the answer if it's waiting on one. Tell the merge lock's holder (`state.py merge show`) it still has its turn; everyone else in line keeps waiting, and the next go comes from the merge lock (hq step 4). A session the user took further by hand during the pause carries on from there. Skip `--now`.
 5. Set the goal again (hq step 0).
-6. Post a full digest (step 6), opening with "Resumed; paused for about <how long>." and saying which estimates moved because of the pause. Then `state.py digest-posted`.
+6. Post a full digest from `state.py digest` (step 6), opening with "Resumed; paused for about <how long>." and saying which estimates moved because of the pause. Then `state.py digest-posted`.
