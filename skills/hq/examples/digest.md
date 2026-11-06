@@ -1,6 +1,6 @@
 # Example: a digest in Babysitter HQ
 
-The shape every digest has (step 6). Sections 5 and 6 are pasted from `state.py counts` and `state.py table`. The product here is made up.
+The shape every digest has (step 6). `state.py digest` prints it with sections 5 and 6 (`state.py counts` and `state.py table`) and the last line already filled in. The product here is made up.
 
 ---
 
@@ -30,7 +30,7 @@ You answered OD010 (keep the folder icon blue); nothing to change.
 | archive-m11-shared-folders (#214) | archive | M | merged, archive PR merged | `/babysitter:safe-to-archive` | done | x |
 | explore-m15-search | explore | XL | user exploring | `/opsx:propose` | on you | |
 
-Next digest around 4:30 pm EST, if anything changes.
+Next digest around 4:30 pm EST.
 
 ---
 
@@ -55,4 +55,4 @@ A quiet one, when nothing moved:
 | archive-m11-shared-folders (#214) | archive | M | merged, archive PR merged | `/babysitter:safe-to-archive` | done | x |
 | explore-m15-search | explore | XL | user exploring | `/opsx:propose` | on you | |
 
-Next digest around 5:00 pm EST, if anything changes.
+Next digest around 5 pm EST.

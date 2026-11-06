@@ -34,7 +34,7 @@ Read the transcripts with the scan. This is the re-scan from step 4 of `SKILL.md
 python3 <this skill's dir>/watch.py scan "$REPO"
 ```
 
-For each open workspace it prints every new user message and the last few assistant ones. It fetches only what's new (`conductor session message --after <lastMessageId>`, or the end of the transcript the first time), and gives a workspace whose `lastActivityAt` hasn't changed since the last scan one line. It keeps its place in `.context/babysitter-scan.json`. If it says it can't read a workspace, nothing about that workspace is verified: say so in the digest and don't update its row. The CLI doesn't give a workspace's branch, so find its PR from the branch its transcript names (`gh pr list --head <branch> --state all`), or with `gh pr list --search <name>`.
+For each open workspace it prints every new user message and the last few assistant ones. It fetches only what's new (`conductor session message --after <lastMessageId>`, or the end of the transcript the first time), and gives a workspace whose `lastActivityAt` hasn't changed since the last scan one line. It keeps its place in `.context/babysitter-scan.json`. It marks each workspace whose user typed `/opsx:propose` (or `/opsx:ff`, `/opsx:continue`, `/opsx:apply`) in the state file, and ends with the `ADOPT NOW` line for those you aren't driving yet: take each over before you post anything (step 4 of `SKILL.md`). Then comes the `CHECK NOW` line: workspaces whose session offered to start `/opsx:propose` and the user answered, or that named `/opsx:apply`. Read and decide each, as in step 4. Judge the rest from the messages it prints: a workspace whose user asked for the proposal in plain words counts too. If it says it can't read a workspace, nothing about that workspace is verified: say so in the digest and don't update its row. The CLI doesn't give a workspace's branch, so find its PR from the branch its transcript names (`gh pr list --head <branch> --state all`), or with `gh pr list --search <name>`.
 
 ## 2. The state file
 
@@ -52,7 +52,7 @@ Write each message to a file first (it avoids shell quoting problems), then send
 conductor message create --session <sessionId> --message-file .context/msg-<n>.md
 ```
 
-The `Via Babysitter: ` prefix and rules from step 3 still apply. These messages show in the workspace's chat. Two cloud additions for the rules:
+The `Via Babysitter: ` prefix and rules from step 3 still apply. Send a workspace's first brief once its session has finished its current turn (`conductor session status <sessionId> --json` isn't `working`), not in the middle of it. These messages show in the workspace's chat. Two cloud additions for the rules:
 
 - Sessions can't message you back. Tell them to put anything you need (PR URL, questions, setup only the user can do) in their final reply, where you'll read it.
 - Anything that needs the user's own machine (their browser and its logins, local files) can't be done from the cloud. Treat it as a user action (step 5), and write any browser prompt for the user's **local** browser, with the `browser-handoff` skill if it's installed.

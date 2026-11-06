@@ -12,10 +12,15 @@ Works the same locally and in the cloud: it only touches .context/babysitter.jso
   state.py item seed <OA|OD|OT> <n>                  continue numbering after n (an older queue's items)
   state.py workspace set <name> [--stage s] [--effort S|M|L|XL] [--progress p] [--next n] [--eta e]
                                 [--monitoring yes|no] [--pr n] [--waiting w] [--gone]
+                                [--not-yet]          its CHECK NOW clues were read and it isn't proposing yet
   state.py sync-scan                                 stdin: conductor-local.py scan lines, or conductor
                                                      workspace list --json; marks workspaces present or gone
   state.py table                                     the digest's workspace table, markdown
   state.py counts                                    the digest's "Open actions: K (OA001, ...) · ..." line
+  state.py digest                                    the whole digest to fill in: sections, counts, table, next time
+  state.py adopt                                     workspaces that ran `/opsx:propose` (or are past it) that HQ isn't
+                                                     driving yet: take each over before posting anything. Then CHECK NOW:
+                                                     clues that one may be proposing, for HQ to read and decide
   state.py show                                      everything, readable
   state.py digest-posted | last-digest               note a digest's time; print the last one
   state.py pause | resume | paused                   `/babysitter:pause` and `/babysitter:keep-going`; pause and resume print
@@ -29,12 +34,19 @@ Works the same locally and in the cloud: it only touches .context/babysitter.jso
   state.py merge prodded                             note that the lock's holder has had its one prod
   state.py merge show                                the holder, how long it's held the lock, and the line
 """
-import datetime, json, os, sys, tempfile
+import datetime, json, os, re, sys, tempfile
 
 PATH = os.environ.get("BABYSITTER_STATE") or ".context/babysitter.json"
 KINDS = {"OA": "actions", "OD": "decisions", "OT": "tests"}
 GRADES = ("release-blocking", "normal", "minor")
 QUEUES = ("Babysitter HQ", "Open Actions", "Open Decisions", "Open Tests")
+# A user message that starts planning or building (the command comes first, as when it's typed), from which
+# point HQ takes the workspace over. A message that only mentions the command doesn't count.
+PROPOSED = re.compile(r"\s*(<command-name>)?/opsx[:-](propose|ff|continue|apply)\b")
+# Clues HQ reads before deciding: the session offers to start /opsx:propose (and the user answers), or names
+# /opsx:apply, which is what it usually says once the proposal is done.
+OFFER = re.compile(r"/opsx[:-]propose\b")
+APPLY = re.compile(r"/opsx[:-]apply\b")
 COLUMNS = ("workspace", "stage", "effort", "progress", "next step", "ETA", "babysitter monitoring?")
 
 
@@ -111,6 +123,8 @@ def workspace_set(state, name, **fields):
             v = v in (True, "yes", "x", "true", "1")
         if k == "gone":
             w["present"] = False; continue
+        if k == "not_yet":
+            w["dismissed"] = (w.get("dismissed") or []) + (w.get("check") or []); continue
         w[k] = v
     return w
 
@@ -123,7 +137,8 @@ def sync_scan(state, text, self_path=None, self_id=None):
         name = row_name(r)
         pr = r.get("pr")
         fields = {"path": r.get("path"), "branch": r.get("branch"), "session": r.get("session") or r.get("id"),
-                  "stage": r.get("stage"), "pr": pr and pr.get("number")}
+                  "stage": r.get("stage"), "pr": pr and pr.get("number"), "proposed": r.get("proposed"),
+                  "check": r.get("check")}
         if name not in state["workspaces"]:
             carry_over_rename(state, name, fields)
         workspace_set(state, name, present=True, **fields)
@@ -270,6 +285,114 @@ def table(state):
     return "\n".join(lines)
 
 
+def proposed(text):
+    return bool(PROPOSED.match(text or ""))
+
+
+def to_adopt(state):
+    # Ran `/opsx:propose` or later, or its files say it's past exploring, and HQ has never driven it or been told
+    # to stop (--monitoring no). Done work (archive) stays put. Taking it over sets --monitoring yes, which clears it.
+    return [n for n, w in sorted(state["workspaces"].items())
+            if w.get("present", True) and bare(n) not in QUEUES and w.get("monitoring") is None
+            and w.get("stage") != "archive" and (w.get("stage") in ("propose", "apply") or w.get("proposed"))]
+
+
+def said(m):
+    # (who, text) from a Conductor message in the SDK's shape (the local database's content, the cloud's
+    # rawPayload); None for tool calls, results and the like.
+    if isinstance(m, str):
+        try:
+            m = json.loads(m)
+        except ValueError:
+            return None
+    if not isinstance(m, dict) or m.get("type") != "assistant":
+        return None
+    text = "\n".join(b.get("text", "") for b in (m.get("message") or {}).get("content", []) if b.get("type") == "text")
+    return ("assistant", text) if text else None
+
+
+def signals(lines):
+    # lines: [(who, text)], oldest first. A user message right after an offer to start /opsx:propose, and any
+    # session message naming /opsx:apply. HQ reads them and decides; a typed command is `proposed` instead.
+    out, offer = [], False
+    for who, text in lines:
+        if who == "assistant":
+            offer = bool(OFFER.search(text))
+            m = APPLY.search(text)
+            if m:
+                line = (text[:m.start()].split("\n")[-1] + text[m.start():].split("\n")[0]).strip()
+                out.append(f'it said: "{line[:140]}"')
+        elif offer and not proposed(text) and not text.startswith("Via Babysitter"):
+            out.append(f'it offered to start `/opsx:propose` and the user replied: "{" ".join(text.split())[:80]}"')
+            offer = False
+    return out[-3:]
+
+
+def to_check(state):
+    adopt = set(to_adopt(state))
+    return [(n, [c for c in w.get("check") or [] if c not in (w.get("dismissed") or [])])
+            for n, w in sorted(state["workspaces"].items())
+            if w.get("present", True) and bare(n) not in QUEUES and w.get("monitoring") is None
+            and w.get("stage") != "archive" and n not in adopt
+            and any(c not in (w.get("dismissed") or []) for c in w.get("check") or [])]
+
+
+def adopt_lines(state):
+    names, check = to_adopt(state), to_check(state)
+    return (["ADOPT NOW, before you post anything: " + ", ".join(names) + ". Brief each (hq step 3), add it to the "
+             "watcher, `state.py workspace set <name> --monitoring yes`, and say so in the digest."] if names else []) + (
+            ["CHECK NOW, before you post anything: " + " | ".join(f"{n}: {'; '.join(c)}" for n, c in check)
+             + ". Read each one's newest messages. If the user accepted the proposal, or it has one (a `tasks.md`, or "
+             "it says planning is done), take it over as on the ADOPT NOW line. If not, `state.py workspace set "
+             "<name> --not-yet`."] if check else [])
+
+
+def interval(state):
+    # Minutes between digests, from the digests option ("every 15 minutes", "every hour"); None for "on change".
+    d = str(state["options"].get("digests") or "every 30 minutes").lower()
+    if "change" in d:
+        return None
+    n = re.search(r"\d+", d)
+    return int(n.group()) * (60 if "hour" in d else 1) if n else 60 if "hour" in d else 30
+
+
+def clock(t, tz):
+    try:
+        import zoneinfo
+        t = t.astimezone(zoneinfo.ZoneInfo(tz)) if tz else t
+    except (ImportError, KeyError, ValueError):
+        pass
+    return t.strftime("%I:%M %p %Z").lstrip("0").replace("AM", "am").replace("PM", "pm").replace(":00 ", " ")
+
+
+def digest(state, at=None):
+    # The full digest for HQ to fill in, so its shape never depends on what the model remembers.
+    at = at or datetime.datetime.now().astimezone()
+    tz, every = state["options"].get("tz"), interval(state)
+    last = state["digests"][-1] if state["digests"] else None
+    ago = last and int((at - datetime.datetime.fromisoformat(last)).total_seconds() // 60)
+    head = (f"[digests: {state['options'].get('digests') or 'every 30 minutes'}. Last one "
+            + (f"{ago} min ago" if last else "never") + ". Fill in every <...> below and post it as one message, "
+            "keeping the headings, the counts line, the table and the last line as they are. Then `state.py digest-posted`.]")
+    waiting = [f"- **{w['name']}:** {w['waiting']}" for n, w in sorted(state["workspaces"].items())
+               if w.get("present", True) and w.get("waiting") and bare(n) not in QUEUES]
+    nxt = (f"Next digest around {clock(at + datetime.timedelta(minutes=every), tz)}." if every
+           else "Next digest when something moves (you asked for digests on change).")
+    return "\n".join(adopt_lines(state) + [head, "",
+        "<What happened: a short paragraph or two, biggest first, as what the product's users get. Each workspace "
+        "you took over: \"Babysitter is taking over <name> now to keep it moving forward. You can tell me to stop "
+        "babysitting it at any time.\" Nothing moved: one line, e.g. \"Quiet quarter hour: everything's still running.\">",
+        "", "**Waiting on you**"] + (waiting or ["<one line per blocking item or ⚠️ STOPPED workspace, with the workspace "
+        "to go to; drop this heading if there are none>"]) + ["",
+        "**Working on now**",
+        "- <a bullet per workspace you're babysitting that isn't done, most important first: the feature in words "
+        "(PR or roadmap number), what it's doing, what's next, when it should merge>",
+        "- <one line: when everything should be merged, and when it should release>", "",
+        "**Critical path:** <the chain to the next release, each link with what it waits on, the holding link in "
+        "bold> Holding it up: <that link>.", "", counts(state), "<one line on any answer that came back, if one did>",
+        "", table(state), "", nxt])
+
+
 def bare(name):
     # "apply-m10-alerts" -> "m10-alerts"; queue names never get a prefix, but strip defensively
     for p in ("explore-", "propose-", "apply-", "archive-"):
@@ -279,7 +402,9 @@ def bare(name):
 
 
 def show(state):
-    out = ([f"PAUSED since {state['paused']['since']}: do nothing on your own until `/babysitter:keep-going`", ""] if state.get("paused") else []) + ["options: " + (", ".join(f"{k}={v}" for k, v in sorted(state["options"].items())) or "(none)"),
+    every = interval(state)
+    out = adopt_lines(state) + [f"digests: {f'every {every} min' if every else 'on change'}, the full shape from "
+           "`state.py digest` every time, never skipped because nothing is building"] + ([f"PAUSED since {state['paused']['since']}: do nothing on your own until `/babysitter:keep-going`", ""] if state.get("paused") else []) + ["options: " + (", ".join(f"{k}={v}" for k, v in sorted(state["options"].items())) or "(none)"),
            "last digest: " + (state["digests"][-1] if state["digests"] else "(none)"), "", table(state), "", counts(state)]
     if merge_show(state):
         out += ["", "merge lock:", merge_show(state)]
@@ -363,6 +488,42 @@ def check():
         workspace_set(m, "m7", session="w7", monitoring="no", present=True); workspace_set(m, "m8", session="w8", monitoring="yes")
         workspace_set(m, "m9", session="w9", monitoring="no", gone=True); workspace_set(m, "m6", session="w6")
         assert ignored(m) == ["w7"]
+        # proposed workspaces get adopted: by command or by stage, until HQ drives them or is told to stop
+        assert proposed("/opsx:propose") and proposed("<command-name>/opsx-apply</command-name>") and not proposed("/opsx:explore x") and not proposed("then I ran /opsx:propose")
+        a = {"options": {}, "next": {k: 1 for k in KINDS}, "items": {}, "workspaces": {}, "digests": []}
+        rows = [{"name": "explore-a", "path": "/w/a", "stage": "explore", "proposed": True},
+                {"name": "propose-b", "path": "/w/b", "stage": "propose"}, {"name": "explore-c", "path": "/w/c", "stage": "explore"},
+                {"name": "archive-d", "path": "/w/d", "stage": "archive", "proposed": True},
+                {"name": "apply-e", "path": "/w/e", "stage": "apply"}, {"name": "Open Tests", "path": "/w/t", "stage": "apply"}]
+        sync_scan(a, "\n".join(json.dumps(r) for r in rows))
+        workspace_set(a, "apply-e", monitoring="no")
+        assert to_adopt(a) == ["explore-a", "propose-b"] and "ADOPT NOW" in show(a) and "ADOPT NOW" in digest(a)
+        workspace_set(a, "explore-a", monitoring="yes"); workspace_set(a, "propose-b", monitoring="yes")
+        assert to_adopt(a) == [] and "ADOPT NOW" not in digest(a)
+        # the digest always has every section, the counts, the table, and the next time on the user's interval
+        a["options"].update(digests="every 15 minutes", tz="America/New_York")
+        a["digests"] = ["2026-01-05T15:00-05:00"]
+        d = digest(a, at=datetime.datetime.fromisoformat("2026-01-05T15:20-05:00"))
+        assert "Last one 20 min ago" in d and d.endswith("Next digest around 3:35 pm EST.")
+        for part in ("**Waiting on you**", "**Working on now**", "**Critical path:**", counts(a), table(a)):
+            assert part in d, part
+        assert interval({"options": {"digests": "every hour"}}) == 60 and interval({"options": {}}) == 30
+        assert interval({"options": {"digests": "on change"}}) is None
+        # clues: an offer to propose and the user's answer, and /opsx:apply named; HQ decides, --not-yet clears
+        offer = [("assistant", "Next: run `/opsx:propose`, or reply yes and I'll start it."), ("user", "a")]
+        assert signals(offer) == ['it offered to start `/opsx:propose` and the user replied: "a"']
+        assert signals(offer[:1]) == [] and signals([offer[0], ("user", "Via Babysitter: go")]) == []
+        assert signals([offer[0], ("user", "/opsx:propose")]) == []               # typed: that's `proposed`
+        assert signals([("assistant", "Proposal done.\nThe next step is to run `/opsx:apply`.")]) == \
+            ['it said: "The next step is to run `/opsx:apply`."']
+        assert said('{"type":"assistant","message":{"content":[{"type":"text","text":"hi"}]}}') == ("assistant", "hi")
+        assert said('{"type":"result"}') is None and said("not json") is None
+        sync_scan(a, json.dumps({"name": "explore-f", "path": "/w/f", "stage": "explore", "check": signals(offer)}))
+        assert [n for n, _ in to_check(a)] == ["explore-f"] and "CHECK NOW" in digest(a)
+        workspace_set(a, "explore-f", not_yet=True)
+        assert to_check(a) == [] and "CHECK NOW" not in digest(a)
+        sync_scan(a, json.dumps({"name": "explore-f", "path": "/w/f", "stage": "explore", "check": signals(offer) + ["new"]}))
+        assert to_check(a) == [("explore-f", ["new"])]                            # only a new clue comes back
     finally:
         PATH = keep
 
@@ -402,7 +563,8 @@ def main(argv):
         item_seed(state, pos[1], pos[2])
     elif cmd == "workspace" and pos[:1] == ["set"] and len(pos) == 2:
         workspace_set(state, pos[1], **{k: opts[k] for k in opts if k in
-                      ("stage", "effort", "progress", "next", "eta", "monitoring", "pr", "waiting", "gone", "path", "session")})
+                      ("stage", "effort", "progress", "next", "eta", "monitoring", "pr", "waiting", "gone", "path", "session")},
+                      not_yet=opts.get("not-yet"))
     elif cmd == "merge" and pos[:1] == ["ready"] and len(pos) == 2 and "pr" in opts:
         merge_ready(state, pos[1], opts["pr"], [f for f in sys.stdin.read().split("\n") if f])
     elif cmd == "merge" and pos == ["next"]:
@@ -414,11 +576,16 @@ def main(argv):
         if merge_state(state)["holder"]:
             merge_state(state)["holder"]["prodded"] = True
     elif cmd == "sync-scan":
-        print("\n".join(sync_scan(state, sys.stdin.read(), self_path=".", self_id=os.environ.get("CONDUCTOR_WORKSPACE_ID"))))
+        print("\n".join(sync_scan(state, sys.stdin.read(), self_path=".", self_id=os.environ.get("CONDUCTOR_WORKSPACE_ID"))
+                         + adopt_lines(state)))
     elif cmd == "table":
         return print(table(state))
     elif cmd == "counts":
         return print(counts(state))
+    elif cmd == "digest":
+        return print(digest(state))
+    elif cmd == "adopt":
+        return print("\n".join(adopt_lines(state)) or "nothing to adopt or check")
     elif cmd == "show":
         return print(show(state))
     elif cmd == "pause":

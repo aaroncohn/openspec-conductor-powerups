@@ -31,6 +31,10 @@ grep -q 'conductor-local.py new-dialog' skills/new-batch-explore/SKILL.md && gre
 grep -q 'state.py other-hq' skills/hq/SKILL.md && grep -q 'state.py other-hq' skills/hq/cloud.md || fail "babysitter must check for another HQ, locally and in the cloud"
 grep -q 'Re-scan on every wake, before anything else' skills/hq/SKILL.md || fail "HQ must re-scan every workspace on every wake (a cloud HQ showed propose/apply workspaces as explore)"
 grep -q 'Never carry a stage over' skills/hq/SKILL.md || fail "HQ must not trust a stored stage"
+grep -q 'ADOPT NOW' skills/hq/SKILL.md && grep -q 'ADOPT NOW' skills/hq/cloud.md && grep -q 'ADOPT NOW' skills/status-check/SKILL.md && grep -q 'ADOPT NOW' skills/keep-going/SKILL.md || fail "every re-scan must take over the ADOPT NOW workspaces (HQ left proposed workspaces as explore for hours)"
+grep -q 'CHECK NOW' skills/hq/SKILL.md && grep -q 'CHECK NOW' skills/hq/cloud.md && grep -q 'CHECK NOW' skills/status-check/SKILL.md || fail "HQ must read the CHECK NOW clues (a \"yes\" to an offer to propose was missed)"
+grep -q 'Write every digest from `state.py digest`' skills/hq/SKILL.md && grep -q 'state.py digest' skills/status-check/SKILL.md || fail "digests must come from state.py digest (the shape drifted on long runs)"
+grep -q 'never switch to it yourself' skills/hq/SKILL.md || fail "HQ must not stop digests on its own when nothing is building"
 grep -q 'watch.py scan' skills/hq/cloud.md && grep -q 'watch.py watch' skills/hq/cloud.md || fail "cloud HQ must use watch.py for its scan and watcher"
 for f in skills/status-check/SKILL.md skills/keep-going/SKILL.md; do grep -q 'full re-scan' "$f" || fail "$f must use hq's full re-scan"; done
 grep -q 'READY TO MERGE: #<pr>' skills/hq/SKILL.md && grep -q 'your turn to merge' skills/hq/SKILL.md && grep -q 'your turn to merge' skills/keep-going/SKILL.md || fail "merges go one at a time through HQ's merge lock"

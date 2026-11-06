@@ -7,10 +7,16 @@
   watch.py scan <repo>
       for every open workspace of the repo: its sessions and their newest messages. Only reads what's new
       since the last scan (.context/babysitter-scan.json); a workspace with no new activity gets one line.
+      A workspace whose user ran `/opsx:propose` (or ff, continue, apply) is marked in the state file, and so
+      are clues that it may be proposing (state.signals); the scan ends with the ADOPT NOW and CHECK NOW lines
+      for the ones HQ isn't driving yet (state.py adopt).
   watch.py check
       the self-test
 """
 import json, os, subprocess, sys, tempfile, time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import state  # noqa: E402
 
 SEEN = ".context/babysitter-scan.json"
 SKIP = os.environ.get("CONDUCTOR_WORKSPACE_ID")
@@ -108,11 +114,7 @@ def said(m):
     c = m.get("content") or {}
     if m.get("type") == "userMessage":
         return "user", c.get("message") or ""
-    p = c.get("rawPayload") or {}
-    if m.get("type") == "agent" and p.get("type") == "assistant":
-        text = "\n".join(b["text"] for b in p["message"].get("content", []) if b.get("type") == "text")
-        return ("assistant", text) if text else None
-    return None
+    return state.said(c.get("rawPayload")) if m.get("type") == "agent" else None
 
 
 def newest(msgs):
@@ -131,8 +133,8 @@ def newest(msgs):
 
 def scan(repo, seen):
     # Prints the scan and updates `seen` in place. A workspace it couldn't read keeps its old activity, so the
-    # next scan tries it again.
-    now = workspaces(repo)
+    # next scan tries it again. Returns {id: (name, typed /opsx:propose or later, clues)} for those with either.
+    now, found = workspaces(repo), {}
     if now is None:
         sys.exit("couldn't list the workspaces; nothing is verified. Fix the CLI (see cloud.md), then scan again.")
     for w, (name, activity) in sorted(now.items(), key=lambda x: x[1][0]):
@@ -141,7 +143,7 @@ def scan(repo, seen):
             print(f"== {name} ({w}): no activity since the last scan")
             continue
         print(f"== {name} ({w}): active {activity}")
-        ok, last = True, old.get("last") or {}
+        ok, last, tail = True, old.get("last") or {}, old.get("tail") or {}
         sessions = cli("workspace", "session", w, "--limit", "100").get("data")
         for s in sessions if sessions is not None else []:
             msgs = messages(s["id"], last.get(s["id"]))
@@ -151,15 +153,37 @@ def scan(repo, seen):
                 continue
             if msgs:
                 last[s["id"]] = msgs[-1]["id"]
+            lines = [x for x in map(said, msgs) if x]
+            typed = any(who == "user" and state.proposed(text) for who, text in lines)
+            # the last thing the session said before this scan, so an offer then and the user's answer now pair up
+            clues = state.signals(([("assistant", tail[s["id"]])] if s["id"] in tail else []) + lines)
+            said_last = [text for who, text in lines if who == "assistant"]
+            if said_last:
+                tail[s["id"]] = said_last[-1][-CUT:]
+            if typed or clues:
+                f = found.setdefault(w, [name, False, []])
+                f[1], f[2] = f[1] or typed, f[2] + clues
             print(f"session {s['id']}: {status(s['id'])[0] or 'status unknown'}")
             print("\n".join(newest(msgs)) or "(nothing new said)")
         if sessions is None:
             ok = False
             print("couldn't list its sessions")
         if ok:
-            seen[w] = {"activity": activity, "last": last}
+            seen[w] = {"activity": activity, "last": last, "tail": tail}
     for w in [w for w in seen if w not in now]:
         del seen[w]
+    return found
+
+
+def mark(found):
+    # Into the state file (cloud rows keep the workspace ID as "session"), then the ADOPT NOW and CHECK NOW lines.
+    s = state.load()
+    for w, (name, typed, clues) in found.items():
+        old = (s["workspaces"].get(name) or {}).get("check") or []
+        state.workspace_set(s, name, session=w, present=True, proposed=typed or None,
+                            check=(old + [c for c in clues if c not in old])[-5:])
+    state.save(s)
+    return state.adopt_lines(s)
 
 
 def check():
@@ -217,17 +241,31 @@ def check():
         pages[:] = [{"data": [a]}]
         sys.stdout = open(os.devnull, "w")
         try:
-            scan("r", seen)
-            assert seen == {"a": {"activity": "1", "last": {"s1": "m3"}}}
+            assert scan("r", seen) == {"a": ["explore-a", True, []]}              # it ran /opsx:propose
+            assert seen == {"a": {"activity": "1", "last": {"s1": "m3"}, "tail": {"s1": "planning is done"}}}
             msg["s1"].append({"id": "m4", "type": "userMessage", "content": {"message": "/opsx:apply"}})
-            scan("r", seen)
+            assert scan("r", seen) == {}
             assert seen["a"]["last"]["s1"] == "m3"                                 # no activity: not read
             pages[:] = [{"data": [{**a, "lastActivityAt": "2"}]}]
             scan("r", seen)
-            assert seen["a"] == {"activity": "2", "last": {"s1": "m4"}}
+            assert seen["a"]["last"] == {"s1": "m4"}
+            # an offer in one scan and the user's "yes" in the next still pair up
+            seen["a"]["tail"]["s1"] = "Want me to start `/opsx:propose`? Reply yes."
+            msg["s1"].append({"id": "m5", "type": "userMessage", "content": {"message": "yes"}})
+            pages[:] = [{"data": [{**a, "lastActivityAt": "3"}]}]
+            assert scan("r", seen)["a"][2] == ['it offered to start `/opsx:propose` and the user replied: "yes"']
             pages[:] = [{"data": []}]
             scan("r", seen)
             assert seen == {}                                                      # a gone workspace drops out
+            keep_path, state.PATH = state.PATH, os.path.join(tempfile.mkdtemp(), "s.json")
+            try:
+                assert "ADOPT NOW" in mark({"a": ["explore-a", True, []]})[0]         # never driven: adopt it
+                assert "CHECK NOW" in mark({"b": ["explore-b", False, ["it said: x"]]})[1]
+                s = state.load(); state.workspace_set(s, "explore-a", monitoring="yes"); state.save(s)
+                s = state.load(); state.workspace_set(s, "explore-b", not_yet=True); state.save(s)
+                assert mark({"a": ["explore-a", True, []]}) == []                     # driven, and checked
+            finally:
+                state.PATH = keep_path
         finally:
             sys.stdout.close()
             sys.stdout = stdout
@@ -242,7 +280,8 @@ def main(argv):
     if cmd == "scan" and len(args) == 1:
         seen = json.load(open(SEEN)) if os.path.exists(SEEN) else {}
         try:
-            scan(args[0], seen)
+            typed = scan(args[0], seen)
+            print("\n".join(mark(typed)))
         finally:
             os.makedirs(os.path.dirname(SEEN), exist_ok=True)
             with open(SEEN, "w") as f:

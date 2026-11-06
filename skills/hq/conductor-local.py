@@ -20,6 +20,9 @@ be open. Back up first:  sqlite3 "$CONDUCTOR_DB_PATH" ".backup '<file>'"
 """
 import datetime, glob, json, os, sqlite3, subprocess, sys, time, urllib.parse, uuid
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from state import proposed, said, signals  # noqa: E402  shared with the cloud scan, so both catch the same things
+
 DB = os.environ.get("CONDUCTOR_DB_PATH") or os.path.expanduser(
     "~/Library/Application Support/com.conductor.app/conductor.db")
 
@@ -260,7 +263,7 @@ def scan_rows():
     base = "origin/" + base_branch()
     db = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
     rows = db.execute(
-        "select w.workspace_name, w.workspace_path, w.branch, w.active_session_id, ifnull(s.status, ''), s.updated_at"
+        "select w.workspace_name, w.workspace_path, w.branch, w.active_session_id, ifnull(s.status, ''), s.updated_at, w.id"
         " from workspaces w left join sessions s on s.id = w.active_session_id"
         " where w.repository_id = (select id from repos where root_path = ?) and w.state != 'archived'",
         (root,)).fetchall()
@@ -268,7 +271,11 @@ def scan_rows():
     archived = {p.split("-", 3)[-1] for p in
                 out(["git", "ls-tree", "--name-only", base + ":openspec/changes/archive/"], ".").split()}
     rows_out = []
-    for name, path, branch, session_id, status, updated in rows:
+    for name, path, branch, session_id, status, updated, workspace_id in rows:
+        # Any chat tab of the workspace counts: the user may have typed /opsx:propose in a second one.
+        typed = db.execute("select m.content from session_messages m join sessions s on s.id = m.session_id"
+                           " where s.workspace_id = ? and m.role = 'user' and m.content like '%/opsx%'",
+                           (workspace_id,)).fetchall()
         changes, unarchived = [], []
         for d in sorted(glob.glob(os.path.join(path or "", "openspec/changes/*/"))):
             change = os.path.basename(d.rstrip("/"))
@@ -289,8 +296,21 @@ def scan_rows():
         rows_out.append({"name": name, "path": path, "branch": branch, "session": session_id,
                          "status": status, "updated": updated, "base": base, "changes": unarchived,
                          "pr": pr and {"number": pr["number"], "state": pr["state"]},
-                         "stage": stage(changes, code, bool(merged))})
+                         "stage": stage(changes, code, bool(merged)),
+                         "proposed": any(proposed(t) for (t,) in typed), "check": clues(db, workspace_id)})
     return rows_out
+
+
+def clues(db, workspace_id):
+    # From each chat tab's newest messages: an offer to start /opsx:propose and the user's answer, or
+    # /opsx:apply named (see state.signals). HQ reads them and decides.
+    out = []
+    for (s,) in db.execute("select id from sessions where workspace_id = ?", (workspace_id,)).fetchall():
+        rows = db.execute("select role, content from session_messages where session_id = ? and role in ('user', 'assistant')"
+                          " and cancelled_at is null order by created_at desc limit 200", (s,)).fetchall()
+        lines = [("user", c) if r == "user" else said(c) for r, c in reversed(rows)]
+        out += signals([x for x in lines if x and x[1]])
+    return out
 
 
 def scan():
